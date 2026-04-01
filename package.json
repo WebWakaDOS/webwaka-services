@@ -1,7 +1,7 @@
 {
   "name": "@webwaka/services",
   "version": "0.1.0",
-  "description": "WebWaka Services Suite — Consulting, Freelancing, and Agencies on WebWaka OS v4",
+  "description": "WebWaka Services Suite \u2014 Consulting, Freelancing, and Agencies on WebWaka OS v4",
   "private": true,
   "scripts": {
     "dev": "wrangler dev",
@@ -14,7 +14,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@webwaka/core": "github:WebWakaDOS/webwaka-core#main",
+    "@webwaka/core": "^1.3.2",
     "hono": "^4.4.0",
     "dexie": "^3.2.7"
   },
