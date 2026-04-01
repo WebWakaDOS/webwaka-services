@@ -38,7 +38,7 @@ export function formatCurrency(amountKobo: number, currency: string, locale: Sup
 }
 
 // Service types
-export const SERVICE_TYPE_LABELS: Record<string, Record<SupportedLocale, string>> = {
+export const SERVICE_TYPE_LABELS: Record<'consulting' | 'freelance' | 'agency', Record<SupportedLocale, string>> = {
   consulting: {
     'en-NG': 'Consulting', 'en-GH': 'Consulting', 'en-KE': 'Consulting',
     'en-ZA': 'Consulting', 'fr-CI': 'Consultation', 'yo-NG': 'Igbanimọran', 'ha-NG': 'Shawarwari',
