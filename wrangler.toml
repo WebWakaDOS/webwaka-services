@@ -1,11 +1,11 @@
-name = "webwaka-institutional"
+name = "webwaka-services"
 main = "src/worker.ts"
 compatibility_date = "2024-07-25"
 compatibility_flags = ["nodejs_compat"]
 
 # ─── Staging Environment ──────────────────────────────────────────────────────
 [env.staging]
-name = "webwaka-institutional-staging"
+name = "webwaka-services-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"
@@ -22,14 +22,14 @@ id = "66409835080f4d0989b0767b98d5dff8"
 
 [[env.staging.r2_buckets]]
 binding = "MEDIA_BUCKET"
-bucket_name = "webwaka-institutional-media-staging"
+bucket_name = "webwaka-services-docs-staging"
 
 [env.staging.vars]
 ENVIRONMENT = "staging"
 
 # ─── Production Environment ───────────────────────────────────────────────────
 [env.production]
-name = "webwaka-institutional-production"
+name = "webwaka-services-production"
 
 [[env.production.d1_databases]]
 binding = "DB"
@@ -46,7 +46,7 @@ id = "7f71de40bb3c4f419f617022d18da45f"
 
 [[env.production.r2_buckets]]
 binding = "MEDIA_BUCKET"
-bucket_name = "webwaka-institutional-media-production"
+bucket_name = "webwaka-services-docs-prod"
 
 [env.production.vars]
 ENVIRONMENT = "production"
