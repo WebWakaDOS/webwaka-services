@@ -15,6 +15,10 @@ export interface Bindings {
   PAYSTACK_SECRET_KEY: string;
   OPENROUTER_API_KEY: string;
   TERMII_API_KEY: string;
+  /** Shared secret used to verify inbound WhatsApp webhook challenges */
+  WHATSAPP_VERIFY_TOKEN: string;
+  /** Optional Termii sender ID for WhatsApp Business channel */
+  TERMII_WHATSAPP_SENDER_ID?: string;
 }
 
 /**
@@ -30,6 +34,48 @@ export interface AppVariables {
 
 export type ProjectStatus = 'draft' | 'active' | 'on_hold' | 'completed' | 'cancelled';
 export type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+
+/**
+ * WhatsApp conversational state machine states.
+ * Progression: IDLE → GREETING → COLLECT_SERVICE → COLLECT_DATE →
+ *              COLLECT_TIME → CONFIRM → BOOKED | CANCELLED
+ */
+export type WhatsAppSessionState =
+  | 'IDLE'
+  | 'GREETING'
+  | 'COLLECT_SERVICE'
+  | 'COLLECT_DATE'
+  | 'COLLECT_TIME'
+  | 'CONFIRM'
+  | 'BOOKED'
+  | 'CANCELLED';
+
+export interface Appointment {
+  id: string;
+  tenantId: string;
+  clientPhone: string;
+  clientName: string | null;
+  service: string;
+  scheduledAt: string;
+  durationMinutes: number;
+  status: AppointmentStatus;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WhatsAppSession {
+  id: string;
+  tenantId: string;
+  phone: string;
+  state: WhatsAppSessionState;
+  collectedService: string | null;
+  collectedDate: string | null;
+  collectedTime: string | null;
+  appointmentId: string | null;
+  updatedAt: string;
+}
 
 export interface Client {
   id: string;

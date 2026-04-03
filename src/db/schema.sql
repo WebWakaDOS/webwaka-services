@@ -45,3 +45,35 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_tenantId ON invoices(tenantId);
 CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON invoices(clientId);
+
+-- ─── Appointments ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS appointments (
+  id TEXT PRIMARY KEY,
+  tenantId TEXT NOT NULL,
+  clientPhone TEXT NOT NULL,
+  clientName TEXT,
+  service TEXT NOT NULL,
+  scheduledAt TEXT NOT NULL,
+  durationMinutes INTEGER NOT NULL DEFAULT 30,
+  status TEXT NOT NULL DEFAULT 'pending',
+  notes TEXT,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_appointments_tenantId ON appointments(tenantId);
+CREATE INDEX IF NOT EXISTS idx_appointments_phone ON appointments(clientPhone);
+CREATE INDEX IF NOT EXISTS idx_appointments_scheduledAt ON appointments(scheduledAt);
+
+-- ─── WhatsApp Conversational Sessions ────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+  id TEXT PRIMARY KEY,
+  tenantId TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  state TEXT NOT NULL DEFAULT 'IDLE',
+  collectedService TEXT,
+  collectedDate TEXT,
+  collectedTime TEXT,
+  appointmentId TEXT,
+  updatedAt TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_tenant_phone ON whatsapp_sessions(tenantId, phone);

@@ -1,0 +1,166 @@
+/**
+ * Appointments Module — REST CRUD
+ *
+ * Authenticated endpoints for internal management of booked appointments.
+ * Tenant isolation is enforced via JWT (tenantId NEVER sourced from headers).
+ *
+ * Routes:
+ *   GET  /api/appointments          — list appointments for tenant
+ *   GET  /api/appointments/:id      — get single appointment
+ *   POST /api/appointments          — manually create an appointment
+ *   PATCH /api/appointments/:id     — update status / notes
+ *   DELETE /api/appointments/:id    — cancel appointment
+ */
+
+import { Hono } from 'hono';
+import { requireRole } from '@webwaka/core';
+import type { Bindings, AppVariables } from '../../core/types';
+
+export const appointmentsRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
+
+// ─── List ─────────────────────────────────────────────────────────────────────
+
+appointmentsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), async (c) => {
+  const user = c.get('user');
+  const tenantId = user.tenantId;
+
+  const status = c.req.query('status');
+  const phone = c.req.query('phone');
+
+  let query = 'SELECT * FROM appointments WHERE tenantId = ?';
+  const bindings: unknown[] = [tenantId];
+
+  if (status) {
+    query += ' AND status = ?';
+    bindings.push(status);
+  }
+  if (phone) {
+    query += ' AND clientPhone = ?';
+    bindings.push(phone);
+  }
+
+  query += ' ORDER BY scheduledAt ASC';
+
+  const stmt = c.env.DB.prepare(query);
+  const { results } = await stmt.bind(...bindings).all();
+
+  return c.json({ data: results });
+});
+
+// ─── Get Single ───────────────────────────────────────────────────────────────
+
+appointmentsRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), async (c) => {
+  const user = c.get('user');
+  const tenantId = user.tenantId;
+  const id = c.req.param('id');
+
+  const row = await c.env.DB.prepare(
+    'SELECT * FROM appointments WHERE id = ? AND tenantId = ?'
+  ).bind(id, tenantId).first();
+
+  if (!row) return c.json({ error: 'Appointment not found' }, 404);
+  return c.json({ data: row });
+});
+
+// ─── Create (manual) ─────────────────────────────────────────────────────────
+
+appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
+  const user = c.get('user');
+  const tenantId = user.tenantId;
+  const body = await c.req.json<{
+    clientPhone: string;
+    clientName?: string;
+    service: string;
+    scheduledAt: string;
+    durationMinutes?: number;
+    notes?: string;
+  }>();
+
+  if (!body.clientPhone || !body.service || !body.scheduledAt) {
+    return c.json({ error: 'clientPhone, service, and scheduledAt are required' }, 400);
+  }
+
+  const id = crypto.randomUUID();
+  const now = new Date().toISOString();
+
+  await c.env.DB.prepare(
+    `INSERT INTO appointments
+       (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes, status, notes, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
+  ).bind(
+    id,
+    tenantId,
+    body.clientPhone,
+    body.clientName ?? null,
+    body.service,
+    body.scheduledAt,
+    body.durationMinutes ?? 30,
+    body.notes ?? null,
+    now,
+    now,
+  ).run();
+
+  return c.json({ success: true, id }, 201);
+});
+
+// ─── Update ───────────────────────────────────────────────────────────────────
+
+appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
+  const user = c.get('user');
+  const tenantId = user.tenantId;
+  const id = c.req.param('id');
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM appointments WHERE id = ? AND tenantId = ?'
+  ).bind(id, tenantId).first();
+
+  if (!existing) return c.json({ error: 'Appointment not found' }, 404);
+
+  const body = await c.req.json<{
+    status?: string;
+    notes?: string;
+    scheduledAt?: string;
+  }>();
+
+  const now = new Date().toISOString();
+  const fields: string[] = [];
+  const vals: unknown[] = [];
+
+  if (body.status) { fields.push('status = ?'); vals.push(body.status); }
+  if (body.notes !== undefined) { fields.push('notes = ?'); vals.push(body.notes); }
+  if (body.scheduledAt) { fields.push('scheduledAt = ?'); vals.push(body.scheduledAt); }
+
+  if (fields.length === 0) return c.json({ error: 'No fields to update' }, 400);
+
+  fields.push('updatedAt = ?');
+  vals.push(now);
+  vals.push(id);
+  vals.push(tenantId);
+
+  await c.env.DB.prepare(
+    `UPDATE appointments SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`
+  ).bind(...vals).run();
+
+  return c.json({ success: true });
+});
+
+// ─── Delete (cancel) ──────────────────────────────────────────────────────────
+
+appointmentsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
+  const user = c.get('user');
+  const tenantId = user.tenantId;
+  const id = c.req.param('id');
+
+  const existing = await c.env.DB.prepare(
+    'SELECT id FROM appointments WHERE id = ? AND tenantId = ?'
+  ).bind(id, tenantId).first();
+
+  if (!existing) return c.json({ error: 'Appointment not found' }, 404);
+
+  const now = new Date().toISOString();
+  await c.env.DB.prepare(
+    "UPDATE appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?"
+  ).bind(now, id, tenantId).run();
+
+  return c.json({ success: true });
+});

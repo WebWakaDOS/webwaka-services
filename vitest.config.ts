@@ -4,6 +4,7 @@ import path from 'path';
 export default defineConfig({
   resolve: {
     alias: {
+      '@webwaka/core/notifications': path.resolve(__dirname, 'src/__mocks__/@webwaka/core-notifications.ts'),
       '@webwaka/core': path.resolve(__dirname, 'src/__mocks__/@webwaka/core.ts'),
     },
   },

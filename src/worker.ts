@@ -18,6 +18,8 @@ import type { Bindings, AppVariables } from './core/types';
 import { projectsRouter } from './modules/projects/index';
 import { clientsRouter } from './modules/clients/index';
 import { invoicesRouter } from './modules/invoices/index';
+import { appointmentsRouter } from './modules/appointments/index';
+import { whatsappRouter } from './modules/whatsapp/index';
 
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -43,6 +45,13 @@ app.get('/health', (c) => c.json({ status: 'ok', service: 'webwaka-services', ve
 app.route('/api/projects', projectsRouter);
 app.route('/api/clients', clientsRouter);
 app.route('/api/invoices', invoicesRouter);
+app.route('/api/appointments', appointmentsRouter);
+
+// ─── WhatsApp Webhook (unauthenticated — secured by WHATSAPP_VERIFY_TOKEN) ───
+// Endpoint: /webhook/whatsapp/:tenantId
+// GET  → Meta hub.challenge verification
+// POST → Inbound message → state machine → D1 → NotificationService reply
+app.route('/webhook/whatsapp', whatsappRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

@@ -74,6 +74,60 @@ Required secrets (set via `wrangler secret put`):
 - `OPENROUTER_API_KEY`
 - `TERMII_API_KEY`
 
+## WhatsApp Appointment Booking (T-MM-03)
+
+### Architecture
+
+Inbound WhatsApp messages arrive at `POST /webhook/whatsapp/:tenantId` via Termii.
+A conversational state machine drives the booking flow; session state is persisted in D1.
+Outbound replies are sent through `@webwaka/core/notifications` → `NotificationService.dispatch(type:'sms')` → Termii (WhatsApp Business channel).
+
+### State Machine Flow
+
+```
+IDLE → GREETING → COLLECT_SERVICE → COLLECT_DATE → COLLECT_TIME → CONFIRM → BOOKED
+                                                                           ↘ CANCELLED
+```
+
+At any point, "cancel"/"no"/"stop" terminates the session.  
+Global restart: "hi"/"hello"/"book"/"start" restarts from GREETING.
+
+### Services Available
+
+1. Consultation
+2. Project Review
+3. Financial Review
+4. Strategy Session
+5. Support Call
+
+### Webhook Endpoints
+
+- `GET  /webhook/whatsapp/:tenantId` — Meta hub.challenge verification
+- `POST /webhook/whatsapp/:tenantId` — Receive inbound WhatsApp messages
+
+### Appointment REST API (Authenticated)
+
+- `GET    /api/appointments` — list (filter by `?status=` or `?phone=`)
+- `GET    /api/appointments/:id` — single appointment
+- `POST   /api/appointments` — manually create
+- `PATCH  /api/appointments/:id` — update status/notes/scheduledAt
+- `DELETE /api/appointments/:id` — cancel
+
+### Required Secrets
+
+```
+WHATSAPP_VERIFY_TOKEN       # shared token for Meta/Termii hub.challenge
+TERMII_WHATSAPP_SENDER_ID   # optional: Termii sender ID for WhatsApp Business
+```
+
+Set via: `wrangler secret put WHATSAPP_VERIFY_TOKEN --env <staging|production>`
+
+### Nigeria-First Details
+
+- All times stored as UTC ISO 8601; displayed in WAT (UTC+1)
+- Date parser supports: "tomorrow", "next Monday", "15th April", "15/04", "April 15"
+- Time parser supports: "3pm", "3:30pm", "14:00", "3 o'clock", "10am"
+
 ## Testing
 
 ```

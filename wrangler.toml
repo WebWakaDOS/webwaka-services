@@ -56,3 +56,5 @@ ENVIRONMENT = "production"
 # PAYSTACK_SECRET_KEY
 # OPENROUTER_API_KEY
 # TERMII_API_KEY
+# WHATSAPP_VERIFY_TOKEN        — shared secret for Meta/Termii hub.challenge verification
+# TERMII_WHATSAPP_SENDER_ID    — optional: Termii sender ID for WhatsApp Business channel
