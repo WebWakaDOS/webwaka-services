@@ -6,15 +6,20 @@
  * @webwaka/core/notifications (NotificationService → Termii SMS/WhatsApp).
  *
  * Routes (UNAUTHENTICATED — inbound from Termii / WhatsApp Business API):
- *   GET  /webhook/whatsapp   — verify challenge (Meta-compatible hub.challenge)
- *   POST /webhook/whatsapp   — receive inbound message & drive state machine
+ *   GET  /webhook/whatsapp/:tenantId — verify challenge (Meta-compatible hub.challenge)
+ *   POST /webhook/whatsapp/:tenantId — receive inbound message & drive state machine
  *
  * Tenant routing: The webhook URL embeds the tenantId as a path param
  * (/webhook/whatsapp/:tenantId) so a single worker can serve all tenants.
  *
- * Security:
- *   - GET: WHATSAPP_VERIFY_TOKEN checked before echoing challenge
- *   - POST: Termii signs payloads — token header verified before processing
+ * Security model:
+ *   - GET: WHATSAPP_VERIFY_TOKEN matched before echoing hub.challenge
+ *   - POST: No shared HMAC secret is provided by Termii for inbound webhooks.
+ *     Defense-in-depth relies on: (a) obscure per-tenant URLs, (b) E.164 phone
+ *     validation in parseTermiiInbound, and (c) rate limiting at the worker level
+ *     (applied in worker.ts via RATE_LIMIT_KV).
+ *   - tenantId comes from the URL path and is trusted only for session scoping;
+ *     it does not bypass any auth on the authenticated /api/* routes.
  */
 
 import { Hono } from 'hono';
@@ -84,13 +89,23 @@ whatsappRouter.post('/:tenantId', async (c) => {
   // ── Run state machine ──────────────────────────────────────────────────────
   const result = transition(session, userMessage);
 
-  // Build merged session with transition results
+  // Bug fix: when transitioning to GREETING (global restart, BOOKED→restart,
+  // CANCELLED→restart), explicitly clear all accumulated booking data so stale
+  // values from prior conversations do not persist in D1.
+  const isRestartingToGreeting = result.nextState === 'GREETING';
   const updatedSession: WhatsAppSession = {
     ...session,
     state: result.nextState,
-    collectedService: result.collectedService ?? session.collectedService,
-    collectedDate: result.collectedDate ?? session.collectedDate,
-    collectedTime: result.collectedTime ?? session.collectedTime,
+    collectedService: isRestartingToGreeting
+      ? null
+      : (result.collectedService ?? session.collectedService),
+    collectedDate: isRestartingToGreeting
+      ? null
+      : (result.collectedDate ?? session.collectedDate),
+    collectedTime: isRestartingToGreeting
+      ? null
+      : (result.collectedTime ?? session.collectedTime),
+    appointmentId: isRestartingToGreeting ? null : session.appointmentId,
     updatedAt: new Date().toISOString(),
   };
 
@@ -107,32 +122,44 @@ whatsappRouter.post('/:tenantId', async (c) => {
       updatedSession.state = 'IDLE';
     } else {
       const scheduledAt = buildScheduledAt(date, time);
-      const display = formatScheduledForDisplay(scheduledAt);
-      const appointmentId = crypto.randomUUID();
-      const now = new Date().toISOString();
 
-      try {
-        await c.env.DB.prepare(
-          `INSERT INTO appointments
-             (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes, status, notes, createdAt, updatedAt)
-           VALUES (?, ?, ?, ?, ?, ?, 30, 'confirmed', ?, ?, ?)`
-        ).bind(
-          appointmentId,
-          tenantId,
-          phone,
-          null,
-          service,
-          scheduledAt,
-          null,
-          now,
-          now,
-        ).run();
+      // Bug fix: reject appointments in the past — buildScheduledAt converts
+      // WAT to UTC; compare against current UTC to guard against "today" at a
+      // past time, or any clock-skew scenario.
+      if (scheduledAt <= new Date().toISOString()) {
+        replyBody = MESSAGES.PAST_APPOINTMENT;
+        updatedSession.state = 'COLLECT_DATE';
+        // Keep collectedService; clear date/time so user re-enters them
+        updatedSession.collectedDate = null;
+        updatedSession.collectedTime = null;
+      } else {
+        const display = formatScheduledForDisplay(scheduledAt);
+        const appointmentId = crypto.randomUUID();
+        const now = new Date().toISOString();
 
-        updatedSession.appointmentId = appointmentId;
-        replyBody = MESSAGES.BOOKED(display, appointmentId);
-      } catch {
-        replyBody = MESSAGES.ERROR;
-        updatedSession.state = 'IDLE';
+        try {
+          await c.env.DB.prepare(
+            `INSERT INTO appointments
+               (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes, status, notes, createdAt, updatedAt)
+             VALUES (?, ?, ?, ?, ?, ?, 30, 'confirmed', ?, ?, ?)`
+          ).bind(
+            appointmentId,
+            tenantId,
+            phone,
+            null,
+            service,
+            scheduledAt,
+            null,
+            now,
+            now,
+          ).run();
+
+          updatedSession.appointmentId = appointmentId;
+          replyBody = MESSAGES.BOOKED(display, appointmentId);
+        } catch {
+          replyBody = MESSAGES.ERROR;
+          updatedSession.state = 'IDLE';
+        }
       }
     }
   }

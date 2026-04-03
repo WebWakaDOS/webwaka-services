@@ -141,7 +141,11 @@ export function parseDate(input: string): string | null {
     if (monthIdx !== undefined && !isNaN(dayNum)) {
       const year = today.getFullYear();
       const d = new Date(year, monthIdx, dayNum);
+      // Bug fix: reject overflow dates (e.g. "31st February" silently becoming March 3rd)
+      if (d.getMonth() !== monthIdx) return null;
       if (d < today) d.setFullYear(year + 1);
+      // Re-check overflow after year roll-forward (e.g. Feb 29 in a non-leap year)
+      if (d.getMonth() !== monthIdx) return null;
       if (d >= today) return formatISODate(d);
     }
   }
@@ -150,10 +154,13 @@ export function parseDate(input: string): string | null {
   const numericDateMatch = raw.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?$/);
   if (numericDateMatch) {
     const day = parseInt(numericDateMatch[1] ?? '0', 10);
-    const month = parseInt(numericDateMatch[2] ?? '0', 10) - 1;
+    const monthIdx = parseInt(numericDateMatch[2] ?? '0', 10) - 1;
     const year = numericDateMatch[3] ? parseInt(numericDateMatch[3], 10) : today.getFullYear();
-    const d = new Date(year, month, day);
+    const d = new Date(year, monthIdx, day);
+    // Bug fix: reject overflow dates (e.g. day=32 rolling into next month)
+    if (d.getMonth() !== monthIdx) return null;
     if (d < today) d.setFullYear(d.getFullYear() + 1);
+    if (d.getMonth() !== monthIdx) return null;
     if (d >= today) return formatISODate(d);
   }
 
@@ -278,6 +285,9 @@ export const MESSAGES = {
 
   ALREADY_BOOKED: (display: string) =>
     `You already have an appointment booked for *${display}*. Send "cancel" to cancel it or "book" to start a new one.`,
+
+  PAST_APPOINTMENT:
+    `⚠️ That time has already passed. Please choose a future date and time.\n\nWhat date works for you?\nExamples: "tomorrow", "next Monday", "15th April"`,
 };
 
 // ─── Transition Function ──────────────────────────────────────────────────────

@@ -81,6 +81,12 @@ export interface TermiiInboundPayload {
   media?: { url: string; caption?: string };
 }
 
+/**
+ * E.164 phone number pattern: optional leading +, 7–15 digits.
+ * Termii typically omits the leading + and sends digits only (e.g. 2348012345678).
+ */
+const E164_PATTERN = /^\+?[1-9]\d{6,14}$/;
+
 export function parseTermiiInbound(body: unknown): TermiiInboundPayload | null {
   if (
     typeof body !== 'object' ||
@@ -91,10 +97,18 @@ export function parseTermiiInbound(body: unknown): TermiiInboundPayload | null {
     return null;
   }
   const b = body as Record<string, unknown>;
+  const sender = String(b['sender']).trim();
+  const message = String(b['message']).trim();
+
+  // Bug fix: reject empty or malformed phone numbers to prevent corrupt session keys
+  if (!E164_PATTERN.test(sender)) return null;
+  // Bug fix: reject empty messages — nothing to process
+  if (message.length === 0) return null;
+
   return {
-    sender: String(b['sender']),
+    sender,
     receiver: String(b['receiver'] ?? ''),
-    message: String(b['message']),
+    message,
     direction: String(b['direction'] ?? 'inbound'),
     status: String(b['status'] ?? 'delivered'),
   };

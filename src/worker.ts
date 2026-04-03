@@ -51,6 +51,8 @@ app.route('/api/appointments', appointmentsRouter);
 // Endpoint: /webhook/whatsapp/:tenantId
 // GET  → Meta hub.challenge verification
 // POST → Inbound message → state machine → D1 → NotificationService reply
+// Rate-limited per phone number to prevent flood abuse (30 messages/min per tenant)
+app.use('/webhook/whatsapp/*', rateLimit({ limit: 30, windowSeconds: 60, keyPrefix: 'whatsapp-inbound' }));
 app.route('/webhook/whatsapp', whatsappRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────

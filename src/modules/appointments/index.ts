@@ -14,7 +14,16 @@
 
 import { Hono } from 'hono';
 import { requireRole } from '@webwaka/core';
-import type { Bindings, AppVariables } from '../../core/types';
+import type { Bindings, AppVariables, AppointmentStatus } from '../../core/types';
+
+const VALID_STATUSES: readonly AppointmentStatus[] = ['pending', 'confirmed', 'cancelled', 'completed'];
+
+/** ISO 8601 datetime pattern (basic check — full parse validation done via Date constructor) */
+function isValidISODatetime(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return false;
+  const d = new Date(value);
+  return !isNaN(d.getTime());
+}
 
 export const appointmentsRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -80,6 +89,21 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     return c.json({ error: 'clientPhone, service, and scheduledAt are required' }, 400);
   }
 
+  // Bug fix: validate scheduledAt is a parseable ISO datetime
+  if (!isValidISODatetime(body.scheduledAt)) {
+    return c.json({ error: 'scheduledAt must be a valid ISO 8601 datetime (e.g. 2025-12-01T14:00:00.000Z)' }, 400);
+  }
+
+  // Bug fix: reject past appointments
+  if (body.scheduledAt <= new Date().toISOString()) {
+    return c.json({ error: 'scheduledAt must be in the future' }, 400);
+  }
+
+  // Bug fix: validate durationMinutes is a positive integer when provided
+  if (body.durationMinutes !== undefined && (body.durationMinutes <= 0 || !Number.isInteger(body.durationMinutes))) {
+    return c.json({ error: 'durationMinutes must be a positive integer' }, 400);
+  }
+
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
 
@@ -126,9 +150,26 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
   const fields: string[] = [];
   const vals: unknown[] = [];
 
-  if (body.status) { fields.push('status = ?'); vals.push(body.status); }
+  if (body.status) {
+    // Bug fix: validate status against the AppointmentStatus enum before writing to DB
+    if (!VALID_STATUSES.includes(body.status as AppointmentStatus)) {
+      return c.json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }, 400);
+    }
+    fields.push('status = ?');
+    vals.push(body.status);
+  }
   if (body.notes !== undefined) { fields.push('notes = ?'); vals.push(body.notes); }
-  if (body.scheduledAt) { fields.push('scheduledAt = ?'); vals.push(body.scheduledAt); }
+  if (body.scheduledAt) {
+    // Bug fix: validate scheduledAt format and future constraint when rescheduling
+    if (!isValidISODatetime(body.scheduledAt)) {
+      return c.json({ error: 'scheduledAt must be a valid ISO 8601 datetime' }, 400);
+    }
+    if (body.scheduledAt <= new Date().toISOString()) {
+      return c.json({ error: 'scheduledAt must be in the future' }, 400);
+    }
+    fields.push('scheduledAt = ?');
+    vals.push(body.scheduledAt);
+  }
 
   if (fields.length === 0) return c.json({ error: 'No fields to update' }, 400);
 
