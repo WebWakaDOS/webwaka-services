@@ -21,17 +21,18 @@ args = "Start application"
 name = "Start application"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "npx wrangler dev --port 8000 --ip 0.0.0.0"
-waitForPort = 8000
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "npm run dev"
+waitForPort = 8000
 
 [[ports]]
 localPort = 8000
 externalPort = 8000
+exposeLocalhost = true
 
 [deployment]
 deploymentTarget = "autoscale"

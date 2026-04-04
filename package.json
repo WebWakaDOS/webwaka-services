@@ -4,7 +4,7 @@
   "description": "WebWaka Services Suite \u2014 Consulting, Freelancing, and Agencies on WebWaka OS v4",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --port 8000",
     "deploy:staging": "wrangler deploy --env staging",
     "deploy:production": "wrangler deploy --env production",
     "test": "vitest run",
