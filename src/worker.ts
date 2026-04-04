@@ -20,6 +20,12 @@ import { clientsRouter } from './modules/clients/index';
 import { invoicesRouter } from './modules/invoices/index';
 import { appointmentsRouter } from './modules/appointments/index';
 import { whatsappRouter } from './modules/whatsapp/index';
+import { staffRouter } from './modules/staff/index';
+import { schedulingRouter } from './modules/scheduling/index';
+import { quotesRouter } from './modules/quotes/index';
+import { depositsRouter } from './modules/deposits/index';
+import { remindersRouter } from './modules/reminders/index';
+import { chatbotRouter } from './modules/support/chatbot';
 
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -41,11 +47,22 @@ app.use('/api/*', jwtAuthMiddleware());
 // ─── Health Check (unauthenticated) ──────────────────────────────────────────
 app.get('/health', (c) => c.json({ status: 'ok', service: 'webwaka-services', version: '0.1.0' }));
 
-// ─── Module Routes ────────────────────────────────────────────────────────────
+// ─── Core Module Routes ───────────────────────────────────────────────────────
 app.route('/api/projects', projectsRouter);
 app.route('/api/clients', clientsRouter);
 app.route('/api/invoices', invoicesRouter);
 app.route('/api/appointments', appointmentsRouter);
+
+// ─── Phase 1: Scheduling & Staff ─────────────────────────────────────────────
+app.route('/api/staff', staffRouter);
+app.route('/api/scheduling', schedulingRouter);
+
+// ─── Phase 2: Pricing & Quotes ────────────────────────────────────────────────
+app.route('/api/quotes', quotesRouter);
+app.route('/api/deposits', depositsRouter);
+
+// ─── Phase 3: Reminders ───────────────────────────────────────────────────────
+app.route('/api/reminders', remindersRouter);
 
 // ─── WhatsApp Webhook (unauthenticated — secured by WHATSAPP_VERIFY_TOKEN) ───
 // Endpoint: /webhook/whatsapp/:tenantId
@@ -54,6 +71,14 @@ app.route('/api/appointments', appointmentsRouter);
 // Rate-limited per phone number to prevent flood abuse (30 messages/min per tenant)
 app.use('/webhook/whatsapp/*', rateLimit({ limit: 30, windowSeconds: 60, keyPrefix: 'whatsapp-inbound' }));
 app.route('/webhook/whatsapp', whatsappRouter);
+
+// ─── AI Customer Support Bot Webhook (unauthenticated) ───────────────────────
+// Endpoint: /webhook/support/:tenantId
+// GET  → Meta hub.challenge verification
+// POST → Inbound message → AI platform → reply via WhatsApp or JSON (web widget)
+// Rate-limited to prevent abuse (20 messages/min per tenant)
+app.use('/webhook/support/*', rateLimit({ limit: 20, windowSeconds: 60, keyPrefix: 'support-bot' }));
+app.route('/webhook/support', chatbotRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: 'Not found' }, 404));

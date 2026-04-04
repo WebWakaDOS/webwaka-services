@@ -58,3 +58,5 @@ ENVIRONMENT = "production"
 # TERMII_API_KEY
 # WHATSAPP_VERIFY_TOKEN        — shared secret for Meta/Termii hub.challenge verification
 # TERMII_WHATSAPP_SENDER_ID    — optional: Termii sender ID for WhatsApp Business channel
+# AI_PLATFORM_URL              — URL of the webwaka-ai-platform worker
+# INTER_SERVICE_SECRET         — inter-service auth secret for webwaka-ai-platform calls
