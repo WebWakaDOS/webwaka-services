@@ -20,7 +20,11 @@ import type { Bindings, AppVariables } from '../../core/types';
 
 const DAY_RANGE = [0, 1, 2, 3, 4, 5, 6] as const;
 
-function isValidHHMM(value: string): boolean {
+/**
+ * Validates that a time string is in "HH:MM" 24-hour format.
+ * Exported for unit testing.
+ */
+export function isValidHHMM(value: string): boolean {
   return /^\d{2}:\d{2}$/.test(value);
 }
 

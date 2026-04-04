@@ -74,6 +74,8 @@ wrangler.toml            # Cloudflare environments (staging/production)
 - Full CRUD for staff members with skills, roles, commission tracking
 - Individual weekly availability calendars per staff member
 - Routes: `/api/staff` (list/create), `/api/staff/:id` (get/update/deactivate), `/api/staff/:id/availability` (get/replace)
+- `isValidHHMM` exported for unit testing
+- `POST /api/appointments` now accepts `staffId` and enforces **double-booking prevention** via `checkDoubleBooking()` — returns HTTP 409 on conflict
 
 ### Phase 2: Pricing & Quotes
 
@@ -95,7 +97,10 @@ wrangler.toml            # Cloudflare environments (staging/production)
 - Webhook at `POST /webhook/support/:tenantId` supporting both WhatsApp (Termii) and web widget
 - Calls webwaka-ai-platform with `capabilityId: 'ai.services.support'`
 - Seeded with service catalogue, cancellation policy, and booking FAQ
-- Graceful fallback message when AI platform is unreachable
+- Graceful fallback message directs customers to "call us to book" when AI platform is unreachable (503)
+- Prompt injection mitigation: user content goes only to `prompt` field; system instruction in fixed `BASE_FAQ`
+- Rate-limited at 20 messages/min per tenant (applied in worker.ts)
+- `parseWebWidgetPayload` and `BASE_FAQ` exported for unit testing
 
 **Automated Reminders** (`src/modules/reminders/index.ts`)
 - Schedule reminders via SMS, WhatsApp, or email per appointment
@@ -140,7 +145,7 @@ migrations/0003_staff_scheduling_quotes_deposits_reminders.sql
 
 ```bash
 npm run dev       # wrangler dev on port 8000
-npm test          # Run all unit tests (72 tests)
+npm test          # Run all unit tests (120 tests across 7 files)
 npm run typecheck # TypeScript check
 ```
 

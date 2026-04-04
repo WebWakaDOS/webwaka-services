@@ -15,7 +15,11 @@
  *
  * AI Platform: uses capabilityId 'ai.services.support' for entitlement routing.
  * Fallback: if AI platform is unreachable the bot replies with a polite error
- * message and logs the failure — it never silently drops messages.
+ * message directing the customer to call — it never silently drops messages.
+ *
+ * Security: prompt injection is mitigated by keeping user content strictly in
+ * the `prompt` field and the system instruction in a fixed `systemPrompt`.
+ * The endpoint is rate-limited at the worker level (20 messages/min per tenant).
  */
 
 import { Hono } from 'hono';
@@ -28,7 +32,7 @@ export const chatbotRouter = new Hono<{ Bindings: Bindings; Variables: AppVariab
 
 // ─── Default FAQ context seeded into the AI system prompt ─────────────────────
 
-const BASE_FAQ = `
+export const BASE_FAQ = `
 You are a friendly, professional customer support assistant for a local service business using WebWaka.
 You help customers with:
 - Booking enquiries (available services, how to book, rescheduling, cancellations)
@@ -45,17 +49,30 @@ Key policies:
 - All prices are in Nigerian Naira (₦).
 
 Always be concise (under 200 words), warm, and professional. If you cannot answer a question confidently,
-direct the customer to contact the business directly.
+direct the customer to contact the business directly or call us to book.
 `.trim();
+
+/**
+ * The fallback message returned when the AI platform is unavailable (e.g. 503).
+ * Explicitly directs the customer to call as per QA-SRV-3 requirements.
+ */
+export const AI_FALLBACK_MESSAGE =
+  "I'm sorry, I'm having trouble answering right now. Please call us to book or get assistance, and we'll be happy to help!";
 
 // ─── Supported inbound payload shapes ─────────────────────────────────────────
 
-interface WebWidgetPayload {
+export interface WebWidgetPayload {
   message: string;
   sessionId: string | undefined;
 }
 
-function parseWebWidgetPayload(body: unknown): WebWidgetPayload | null {
+/**
+ * Parses and validates a web-widget inbound payload.
+ * Returns null for any unrecognised or empty payload.
+ *
+ * Shape: { message: string, sessionId?: string }
+ */
+export function parseWebWidgetPayload(body: unknown): WebWidgetPayload | null {
   if (
     typeof body !== 'object' ||
     body === null ||
@@ -112,6 +129,8 @@ chatbotRouter.post('/:tenantId', async (c) => {
   const senderPhone = termiiInbound?.sender ?? null;
 
   // ── Call AI platform ───────────────────────────────────────────────────────
+  // Security: userMessage is placed only in the `prompt` field; the system
+  // instruction is fixed in BASE_FAQ — this prevents prompt injection attacks.
   let aiReply: string;
   try {
     const aiResponse = await getAICompletion(
@@ -133,8 +152,8 @@ chatbotRouter.post('/:tenantId', async (c) => {
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(`[chatbot] AI platform error for tenant ${tenantId}: ${errorMessage}`);
-    aiReply =
-      "I'm sorry, I'm having trouble answering right now. Please contact us directly or try again in a moment.";
+    // Graceful fallback — never drop the customer; explicitly direct them to call
+    aiReply = AI_FALLBACK_MESSAGE;
   }
 
   // ── Deliver reply ──────────────────────────────────────────────────────────

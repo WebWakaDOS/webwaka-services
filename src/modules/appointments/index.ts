@@ -25,6 +25,52 @@ function isValidISODatetime(value: string): boolean {
   return !isNaN(d.getTime());
 }
 
+/**
+ * Checks whether a new appointment for a specific staff member conflicts with
+ * any existing confirmed or pending appointments.
+ *
+ * Two appointments overlap if:
+ *   newStart < existingEnd  AND  newEnd > existingStart
+ *
+ * @returns { hasConflict: true, conflictingId } if a double-booking is detected,
+ *          { hasConflict: false } otherwise.
+ */
+export async function checkDoubleBooking(
+  db: D1Database,
+  tenantId: string,
+  staffId: string,
+  newStartUtc: string,
+  newDurationMinutes: number,
+): Promise<{ hasConflict: boolean; conflictingId?: string }> {
+  const newStart = new Date(newStartUtc).getTime();
+  const newEnd = newStart + newDurationMinutes * 60 * 1000;
+
+  // Query within a ±24h window to avoid full-table scans
+  const windowStart = new Date(newStart - 24 * 60 * 60 * 1000).toISOString();
+  const windowEnd = new Date(newEnd + 24 * 60 * 60 * 1000).toISOString();
+
+  const { results } = await db
+    .prepare(
+      `SELECT id, scheduledAt, durationMinutes FROM appointments
+       WHERE tenantId = ? AND staffId = ?
+         AND status IN ('confirmed', 'pending')
+         AND scheduledAt >= ? AND scheduledAt <= ?`,
+    )
+    .bind(tenantId, staffId, windowStart, windowEnd)
+    .all<{ id: string; scheduledAt: string; durationMinutes: number }>();
+
+  for (const appt of results) {
+    const apptStart = new Date(appt.scheduledAt).getTime();
+    const apptEnd = apptStart + appt.durationMinutes * 60 * 1000;
+    // Strict overlap check: [newStart, newEnd) overlaps [apptStart, apptEnd)
+    if (newStart < apptEnd && newEnd > apptStart) {
+      return { hasConflict: true, conflictingId: appt.id };
+    }
+  }
+
+  return { hasConflict: false };
+}
+
 export const appointmentsRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
 // ─── List ─────────────────────────────────────────────────────────────────────
@@ -35,6 +81,7 @@ appointmentsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), asy
 
   const status = c.req.query('status');
   const phone = c.req.query('phone');
+  const staffId = c.req.query('staffId');
 
   let query = 'SELECT * FROM appointments WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
@@ -46,6 +93,10 @@ appointmentsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), asy
   if (phone) {
     query += ' AND clientPhone = ?';
     bindings.push(phone);
+  }
+  if (staffId) {
+    query += ' AND staffId = ?';
+    bindings.push(staffId);
   }
 
   query += ' ORDER BY scheduledAt ASC';
@@ -83,25 +134,54 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     scheduledAt: string;
     durationMinutes?: number;
     notes?: string;
+    /** Assign appointment to a specific staff member (enables double-booking check) */
+    staffId?: string;
   }>();
 
   if (!body.clientPhone || !body.service || !body.scheduledAt) {
     return c.json({ error: 'clientPhone, service, and scheduledAt are required' }, 400);
   }
 
-  // Bug fix: validate scheduledAt is a parseable ISO datetime
   if (!isValidISODatetime(body.scheduledAt)) {
     return c.json({ error: 'scheduledAt must be a valid ISO 8601 datetime (e.g. 2025-12-01T14:00:00.000Z)' }, 400);
   }
 
-  // Bug fix: reject past appointments
   if (body.scheduledAt <= new Date().toISOString()) {
     return c.json({ error: 'scheduledAt must be in the future' }, 400);
   }
 
-  // Bug fix: validate durationMinutes is a positive integer when provided
-  if (body.durationMinutes !== undefined && (body.durationMinutes <= 0 || !Number.isInteger(body.durationMinutes))) {
+  const durationMinutes = body.durationMinutes ?? 30;
+  if (durationMinutes <= 0 || !Number.isInteger(durationMinutes)) {
     return c.json({ error: 'durationMinutes must be a positive integer' }, 400);
+  }
+
+  // ── Double-booking check ─────────────────────────────────────────────────
+  if (body.staffId) {
+    // Verify staff member exists and belongs to this tenant
+    const staffExists = await c.env.DB.prepare(
+      "SELECT id FROM staff WHERE id = ? AND tenantId = ? AND status = 'active'",
+    )
+      .bind(body.staffId, tenantId)
+      .first<{ id: string }>();
+
+    if (!staffExists) {
+      return c.json({ error: 'Staff member not found or inactive' }, 404);
+    }
+
+    const conflict = await checkDoubleBooking(
+      c.env.DB,
+      tenantId,
+      body.staffId,
+      body.scheduledAt,
+      durationMinutes,
+    );
+
+    if (conflict.hasConflict) {
+      return c.json({
+        error: 'Double-booking detected: staff member already has an appointment at this time',
+        conflictingAppointmentId: conflict.conflictingId,
+      }, 409);
+    }
   }
 
   const id = crypto.randomUUID();
@@ -109,8 +189,9 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
 
   await c.env.DB.prepare(
     `INSERT INTO appointments
-       (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes, status, notes, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`
+       (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes,
+        status, notes, staffId, createdAt, updatedAt)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`
   ).bind(
     id,
     tenantId,
@@ -118,8 +199,9 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     body.clientName ?? null,
     body.service,
     body.scheduledAt,
-    body.durationMinutes ?? 30,
+    durationMinutes,
     body.notes ?? null,
+    body.staffId ?? null,
     now,
     now,
   ).run();
@@ -144,6 +226,7 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
     status?: string;
     notes?: string;
     scheduledAt?: string;
+    staffId?: string | null;
   }>();
 
   const now = new Date().toISOString();
@@ -151,7 +234,6 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
   const vals: unknown[] = [];
 
   if (body.status) {
-    // Bug fix: validate status against the AppointmentStatus enum before writing to DB
     if (!VALID_STATUSES.includes(body.status as AppointmentStatus)) {
       return c.json({ error: `status must be one of: ${VALID_STATUSES.join(', ')}` }, 400);
     }
@@ -160,7 +242,6 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
   }
   if (body.notes !== undefined) { fields.push('notes = ?'); vals.push(body.notes); }
   if (body.scheduledAt) {
-    // Bug fix: validate scheduledAt format and future constraint when rescheduling
     if (!isValidISODatetime(body.scheduledAt)) {
       return c.json({ error: 'scheduledAt must be a valid ISO 8601 datetime' }, 400);
     }
@@ -169,6 +250,10 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
     }
     fields.push('scheduledAt = ?');
     vals.push(body.scheduledAt);
+  }
+  if (body.staffId !== undefined) {
+    fields.push('staffId = ?');
+    vals.push(body.staffId);
   }
 
   if (fields.length === 0) return c.json({ error: 'No fields to update' }, 400);
