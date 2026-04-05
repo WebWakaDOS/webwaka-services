@@ -9,8 +9,8 @@ name = "webwaka-services-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "webwaka-institutional-db-staging"
-database_id = "ee93377c-8000-45d6-ae54-f0d4c588bf04"
+database_name = "webwaka-services-db-staging"
+database_id = "REPLACE_WITH_SERVICES_STAGING_DB_ID"
 
 [[env.staging.kv_namespaces]]
 binding = "SESSIONS_KV"
@@ -33,8 +33,8 @@ name = "webwaka-services-production"
 
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "webwaka-institutional-db-production"
-database_id = "ee93377c-8000-45d6-ae54-f0d4c588bf04"
+database_name = "webwaka-services-db-prod"
+database_id = "REPLACE_WITH_SERVICES_PROD_DB_ID"
 
 [[env.production.kv_namespaces]]
 binding = "SESSIONS_KV"
