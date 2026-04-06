@@ -60,16 +60,15 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --env staging
 
-      - name: Rename legacy tables to svc_ prefix (Staging)
+      - name: Bootstrap DB schema (Staging)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          for table in clients projects invoices appointments whatsapp_sessions staff staff_availability quotes quote_line_items deposits reminder_logs; do
-            npx wrangler d1 execute DB --env staging --remote \
-              --command "ALTER TABLE ${table} RENAME TO svc_${table};" 2>/dev/null || true
-          done
-          echo "✅ Legacy table rename step complete (errors are expected on fresh DBs)"
+          npx wrangler d1 execute DB --env staging --remote --file migrations/0001_initial_schema.sql || true
+          npx wrangler d1 execute DB --env staging --remote --file migrations/0002_appointments_whatsapp.sql || true
+          npx wrangler d1 execute DB --env staging --remote --file migrations/0003_staff_scheduling_quotes_deposits_reminders.sql || true
+          echo "✅ Bootstrap complete (IF NOT EXISTS means duplicates are safe)"
 
       - name: Apply D1 Migrations (Staging)
         env:
@@ -106,16 +105,17 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --env production
 
-      - name: Rename legacy tables to svc_ prefix (Production)
+      - name: Bootstrap DB schema (Production)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          for table in clients projects invoices appointments whatsapp_sessions staff staff_availability quotes quote_line_items deposits reminder_logs; do
-            npx wrangler d1 execute DB --env production --remote \
-              --command "ALTER TABLE ${table} RENAME TO svc_${table};" 2>/dev/null || true
-          done
-          echo "✅ Legacy table rename step complete (errors are expected on fresh DBs)"
+          # Run foundational migrations directly (safe with IF NOT EXISTS - idempotent)
+          # This ensures tables exist even if migration tracker says they were already applied
+          npx wrangler d1 execute DB --env production --remote --file migrations/0001_initial_schema.sql || true
+          npx wrangler d1 execute DB --env production --remote --file migrations/0002_appointments_whatsapp.sql || true
+          npx wrangler d1 execute DB --env production --remote --file migrations/0003_staff_scheduling_quotes_deposits_reminders.sql || true
+          echo "✅ Bootstrap complete (IF NOT EXISTS means duplicates are safe)"
 
       - name: Apply D1 Migrations (Production)
         env:
