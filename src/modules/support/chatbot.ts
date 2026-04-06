@@ -26,7 +26,7 @@ import { Hono } from 'hono';
 import type { Bindings, AppVariables } from '../../core/types';
 import { getAICompletion } from '../../core/ai-platform-client';
 import { sendWhatsAppMessage, verifyWebhookChallenge, parseTermiiInbound } from '../../core/whatsapp';
-import { KNOWN_SERVICES } from '../svc_appointments/stateMachine';
+import { KNOWN_SERVICES } from '../appointments/stateMachine';
 
 export const chatbotRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 

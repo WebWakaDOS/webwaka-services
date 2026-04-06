@@ -279,7 +279,7 @@ externalRouter.post('/svc_appointments', async (c) => {
     if (!staffExists) return c.json({ error: 'Staff member not found or inactive' }, 404);
 
     // Double-booking check
-    const { checkDoubleBooking } = await import('../svc_appointments/index');
+    const { checkDoubleBooking } = await import('../appointments/index');
     const conflict = await checkDoubleBooking(
       c.env.DB,
       tenantId,

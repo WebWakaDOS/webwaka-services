@@ -15,18 +15,18 @@
 import { Hono } from 'hono';
 import { jwtAuthMiddleware, secureCORS, rateLimit } from '@webwaka/core';
 import type { Bindings, AppVariables } from './core/types';
-import { projectsRouter } from './modules/svc_projects/index';
-import { clientsRouter } from './modules/svc_clients/index';
-import { invoicesRouter } from './modules/svc_invoices/index';
-import { appointmentsRouter } from './modules/svc_appointments/index';
+import { projectsRouter } from './modules/projects/index';
+import { clientsRouter } from './modules/clients/index';
+import { invoicesRouter } from './modules/invoices/index';
+import { appointmentsRouter } from './modules/appointments/index';
 import { whatsappRouter } from './modules/whatsapp/index';
-import { staffRouter } from './modules/svc_staff/index';
+import { staffRouter } from './modules/staff/index';
 import { schedulingRouter } from './modules/scheduling/index';
-import { quotesRouter } from './modules/svc_quotes/index';
-import { depositsRouter } from './modules/svc_deposits/index';
+import { quotesRouter } from './modules/quotes/index';
+import { depositsRouter } from './modules/deposits/index';
 import { remindersRouter } from './modules/reminders/index';
 import { chatbotRouter } from './modules/support/chatbot';
-import { servicesRouter } from './modules/svc_services/index';
+import { servicesRouter } from './modules/services/index';
 import { apiKeysRouter } from './modules/api-keys/index';
 import { externalRouter } from './modules/external/index';
 

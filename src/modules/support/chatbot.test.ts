@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseWebWidgetPayload, BASE_FAQ, AI_FALLBACK_MESSAGE } from './chatbot';
-import { KNOWN_SERVICES } from '../svc_appointments/stateMachine';
+import { KNOWN_SERVICES } from '../appointments/stateMachine';
 
 // ─── parseWebWidgetPayload ─────────────────────────────────────────────────────
 

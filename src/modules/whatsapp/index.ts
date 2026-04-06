@@ -30,7 +30,7 @@ import {
   buildScheduledAt,
   formatScheduledForDisplay,
   MESSAGES,
-} from '../svc_appointments/stateMachine';
+} from '../appointments/stateMachine';
 
 export const whatsappRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
