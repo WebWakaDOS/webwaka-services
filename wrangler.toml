@@ -3,6 +3,28 @@ main = "src/worker.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
+# ─── D1 Migrations ────────────────────────────────────────────────────────────
+# wrangler d1 migrations apply <database_name> --env <staging|production> --remote
+[[migrations]]
+tag = "v0001"
+new_sql_file = "migrations/0001_initial_schema.sql"
+
+[[migrations]]
+tag = "v0002"
+new_sql_file = "migrations/0002_appointments_whatsapp.sql"
+
+[[migrations]]
+tag = "v0003"
+new_sql_file = "migrations/0003_staff_scheduling_quotes_deposits_reminders.sql"
+
+[[migrations]]
+tag = "v0004"
+new_sql_file = "migrations/0004_extensions.sql"
+
+[[migrations]]
+tag = "v0005"
+new_sql_file = "migrations/0005_fix_invoices_projectid_nullable.sql"
+
 # ─── Staging Environment ──────────────────────────────────────────────────────
 [env.staging]
 name = "webwaka-services-staging"
@@ -60,4 +82,4 @@ ENVIRONMENT = "production"
 # TERMII_WHATSAPP_SENDER_ID    — optional: Termii sender ID for WhatsApp Business channel
 # AI_PLATFORM_URL              — URL of the webwaka-ai-platform worker
 # INTER_SERVICE_SECRET         — inter-service auth secret for webwaka-ai-platform calls
-# CENTRAL_MGMT_URL             — URL of webwaka-central-mgmt for financial ledger events (WW-SVC-003/007)
+# CENTRAL_MGMT_URL             — URL of webwaka-central-mgmt for financial ledger events

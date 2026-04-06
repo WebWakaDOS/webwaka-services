@@ -35,7 +35,18 @@ interface ApiKeyRecord {
   expiresAt: string | null;
 }
 
-export const externalRouter = new Hono<{ Bindings: Bindings }>();
+/**
+ * Hono context Variables for the external (API-key-authenticated) router.
+ * Separate from AppVariables (JWT-based) — populated by the API key middleware below.
+ */
+interface ExternalVariables {
+  /** Tenant ID resolved from the API key record */
+  tenantId: string;
+  /** Comma-separated scopes granted to the API key */
+  keyScopes: string;
+}
+
+export const externalRouter = new Hono<{ Bindings: Bindings; Variables: ExternalVariables }>();
 
 // ─── API Key Authentication Middleware ────────────────────────────────────────
 
@@ -84,9 +95,9 @@ externalRouter.use('*', async (c, next) => {
     .run()
     .catch(() => null);
 
-  // Inject tenant context
-  c.set('tenantId' as never, keyRecord.tenantId as never);
-  c.set('keyScopes' as never, keyRecord.scopes as never);
+  // Inject tenant context into properly typed Hono Variables
+  c.set('tenantId', keyRecord.tenantId);
+  c.set('keyScopes', keyRecord.scopes);
 
   return await next();
 });
@@ -94,7 +105,7 @@ externalRouter.use('*', async (c, next) => {
 // ─── List Available Services ───────────────────────────────────────────────────
 
 externalRouter.get('/services', async (c) => {
-  const tenantId = c.get('tenantId' as never) as string;
+  const tenantId = c.get('tenantId');
 
   const { results } = await c.env.DB.prepare(
     `SELECT id, name, description, durationMinutes, basePriceKobo
@@ -125,7 +136,7 @@ externalRouter.get('/services', async (c) => {
 // External partners query this to show time slots to their users.
 
 externalRouter.get('/availability', async (c) => {
-  const tenantId = c.get('tenantId' as never) as string;
+  const tenantId = c.get('tenantId');
 
   const serviceId = c.req.query('serviceId');
   const date = c.req.query('date');
@@ -218,8 +229,8 @@ externalRouter.get('/availability', async (c) => {
 // ─── Book an Appointment ──────────────────────────────────────────────────────
 
 externalRouter.post('/appointments', async (c) => {
-  const tenantId = c.get('tenantId' as never) as string;
-  const scopes: string = c.get('keyScopes' as never) as string ?? '';
+  const tenantId = c.get('tenantId');
+  const scopes = c.get('keyScopes') ?? '';
 
   if (!scopes.includes('bookings:write')) {
     return c.json({ error: 'Insufficient scope: bookings:write required' }, 403);
@@ -309,7 +320,7 @@ externalRouter.post('/appointments', async (c) => {
     )
     .run();
 
-  // Auto-schedule 24h + 1h reminders
+  // Auto-schedule 24h + 1h reminders (WW-SVC-005)
   const apptMs = scheduledDate.getTime();
   const nowMs = Date.now();
   for (const offsetMs of [24 * 60 * 60 * 1000, 60 * 60 * 1000]) {
@@ -342,7 +353,7 @@ externalRouter.post('/appointments', async (c) => {
 // ─── Get Booking Status ────────────────────────────────────────────────────────
 
 externalRouter.get('/appointments/:id', async (c) => {
-  const tenantId = c.get('tenantId' as never) as string;
+  const tenantId = c.get('tenantId');
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
