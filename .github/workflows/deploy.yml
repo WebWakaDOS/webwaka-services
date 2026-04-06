@@ -60,6 +60,17 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --env staging
 
+      - name: Rename legacy tables to svc_ prefix (Staging)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for table in clients projects invoices appointments whatsapp_sessions staff staff_availability quotes quote_line_items deposits reminder_logs; do
+            npx wrangler d1 execute DB --env staging --remote \
+              --command "ALTER TABLE ${table} RENAME TO svc_${table};" 2>/dev/null || true
+          done
+          echo "✅ Legacy table rename step complete (errors are expected on fresh DBs)"
+
       - name: Apply D1 Migrations (Staging)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -94,6 +105,17 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --env production
+
+      - name: Rename legacy tables to svc_ prefix (Production)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          for table in clients projects invoices appointments whatsapp_sessions staff staff_availability quotes quote_line_items deposits reminder_logs; do
+            npx wrangler d1 execute DB --env production --remote \
+              --command "ALTER TABLE ${table} RENAME TO svc_${table};" 2>/dev/null || true
+          done
+          echo "✅ Legacy table rename step complete (errors are expected on fresh DBs)"
 
       - name: Apply D1 Migrations (Production)
         env:
