@@ -230,6 +230,22 @@ quotesRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
       .run();
   }
 
+  // WW-SVC-003: Emit ledger event for quote creation
+  await emitLedgerEvent(
+    { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
+    {
+      eventType: 'quote.created',
+      tenantId,
+      entityId: quoteId,
+      entityType: 'quote',
+      amountKobo: totalKobo,
+      currency: 'NGN',
+      clientId: body.clientId,
+      metadata: { service: body.service },
+      occurredAt: now,
+    },
+  );
+
   return c.json({ success: true, id: quoteId }, 201);
 });
 
@@ -268,8 +284,8 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
     .bind(...vals)
     .run();
 
-  // Emit ledger event when quote is accepted (WW-SVC-003)
-  if (body.status === 'accepted') {
+  // Emit ledger event when quote is accepted or rejected (WW-SVC-003)
+  if (body.status === 'accepted' || body.status === 'rejected') {
     const freshQuote = await c.env.DB.prepare(
       'SELECT id, totalKobo, clientId, service FROM quotes WHERE id = ? AND tenantId = ?',
     )
@@ -280,7 +296,7 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
       await emitLedgerEvent(
         { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
         {
-          eventType: 'quote.accepted',
+          eventType: body.status === 'accepted' ? 'quote.accepted' : 'quote.rejected',
           tenantId,
           entityId: freshQuote.id,
           entityType: 'quote',
