@@ -5,25 +5,23 @@
  * cancellation fee policies. Integrates with Paystack for Nigerian payment
  * processing — all amounts in kobo, Invariant 5: Nigeria First.
  *
- * Routes:
- *   POST   /api/deposits                          — create a deposit record & initiate payment
- *   GET    /api/deposits                          — list deposits for the tenant
- *   GET    /api/deposits/:id                      — get single deposit
- *   POST   /api/deposits/:id/verify               — verify Paystack payment and mark as paid
- *   GET    /api/appointments/:appointmentId/deposit — get deposit for an appointment
- *   POST   /api/appointments/:appointmentId/cancel  — cancel appointment with fee enforcement
+ * WW-SVC-007: Emits financial events to webwaka-central-mgmt ledger after
+ * deposit payment verification and on cancellation/forfeit.
  *
- * Cancellation policy:
- *   - If a deposit exists and the appointment is cancelled, the cancellationFeeKobo
- *     is retained (marked 'forfeited'). The remainder is refunded.
- *   - If no deposit exists, the appointment is cancelled with no financial action.
- *   - The cancellationFeeKobo is set at deposit creation time and stored immutably.
+ * Routes:
+ *   POST   /api/deposits                             — create a deposit & initiate payment
+ *   GET    /api/deposits                             — list deposits for the tenant
+ *   GET    /api/deposits/:id                         — get single deposit
+ *   POST   /api/deposits/:id/verify                  — verify Paystack payment
+ *   GET    /api/deposits/appointment/:appointmentId  — get deposit for an appointment
+ *   POST   /api/deposits/appointment/:appointmentId/cancel — cancel with fee enforcement
  */
 
 import { Hono } from 'hono';
 import { requireRole } from '@webwaka/core';
 import type { Bindings, AppVariables } from '../../core/types';
 import { initializePayment, verifyPayment, generatePaymentReference } from '../../core/paystack';
+import { emitLedgerEvent } from '../../core/central-mgmt-client';
 
 export const depositsRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -56,7 +54,6 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     return c.json({ error: 'cancellationFeeKobo cannot exceed amountKobo' }, 400);
   }
 
-  // Ensure appointment belongs to this tenant
   const appt = await c.env.DB.prepare(
     'SELECT id, status FROM appointments WHERE id = ? AND tenantId = ?',
   )
@@ -67,7 +64,6 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     return c.json({ error: 'Cannot create deposit for a cancelled appointment' }, 400);
   }
 
-  // Ensure no existing pending/paid deposit for this appointment
   const existingDeposit = await c.env.DB.prepare(
     "SELECT id FROM deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
   )
@@ -77,7 +73,6 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     return c.json({ error: 'An active deposit already exists for this appointment' }, 400);
   }
 
-  // Initiate Paystack payment
   let paystackRef: string | null = null;
   let authorizationUrl: string | null = null;
 
@@ -98,8 +93,6 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     authorizationUrl = payment.data.authorization_url;
   } catch (err) {
     console.error('[deposits] Paystack init failed:', err);
-    // Continue — record the deposit as pending even if Paystack call fails
-    // so staff can manually mark it paid if needed
   }
 
   const depositId = crypto.randomUUID();
@@ -122,12 +115,27 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     )
     .run();
 
-  // Link deposit to appointment
   await c.env.DB.prepare(
     'UPDATE appointments SET depositId = ?, updatedAt = ? WHERE id = ? AND tenantId = ?',
   )
     .bind(depositId, now, body.appointmentId, tenantId)
     .run();
+
+  // Emit ledger event for deposit creation
+  await emitLedgerEvent(
+    { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
+    {
+      eventType: 'deposit.created',
+      tenantId,
+      entityId: depositId,
+      entityType: 'deposit',
+      amountKobo: body.amountKobo,
+      currency: 'NGN',
+      referenceNumber: paystackRef ?? undefined,
+      metadata: { appointmentId: body.appointmentId },
+      occurredAt: now,
+    },
+  );
 
   return c.json({
     success: true,
@@ -210,12 +218,27 @@ depositsRouter.post('/:id/verify', requireRole(['admin', 'manager']), async (c) 
       .bind(now, id)
       .run();
 
-    // Auto-confirm the appointment when deposit is paid
     await c.env.DB.prepare(
       "UPDATE appointments SET status = 'confirmed', updatedAt = ? WHERE id = ? AND tenantId = ?",
     )
       .bind(now, deposit.appointmentId, tenantId)
       .run();
+
+    // WW-SVC-007: Emit ledger event after successful payment verification
+    await emitLedgerEvent(
+      { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
+      {
+        eventType: 'deposit.paid',
+        tenantId,
+        entityId: id,
+        entityType: 'deposit',
+        amountKobo: verifiedAmountKobo,
+        currency: 'NGN',
+        referenceNumber: deposit.paystackReference,
+        metadata: { appointmentId: deposit.appointmentId },
+        occurredAt: now,
+      },
+    );
   }
 
   return c.json({ success: verified, verified, verifiedAmountKobo });
@@ -256,14 +279,19 @@ depositsRouter.post('/appointment/:appointmentId/cancel', requireRole(['admin', 
 
   const now = new Date().toISOString();
 
-  // Cancel the appointment
   await c.env.DB.prepare(
     "UPDATE appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(now, appointmentId, tenantId)
     .run();
 
-  // Check for an active deposit
+  // Cancel any pending reminders
+  await c.env.DB.prepare(
+    "UPDATE reminder_logs SET status = 'cancelled', updatedAt = ? WHERE appointmentId = ? AND status = 'scheduled'",
+  )
+    .bind(now, appointmentId)
+    .run();
+
   const deposit = await c.env.DB.prepare(
     "SELECT * FROM deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
   )
@@ -280,14 +308,32 @@ depositsRouter.post('/appointment/:appointmentId/cancel', requireRole(['admin', 
   }
 
   const refundKobo = deposit.amountKobo - deposit.cancellationFeeKobo;
-
-  // Mark deposit as forfeited (cancellation fee retained)
   const newDepositStatus = deposit.cancellationFeeKobo > 0 ? 'forfeited' : 'refunded';
+
   await c.env.DB.prepare(
     'UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?',
   )
     .bind(newDepositStatus, now, deposit.id)
     .run();
+
+  // Emit ledger event for deposit forfeiture or refund
+  await emitLedgerEvent(
+    { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
+    {
+      eventType: newDepositStatus === 'forfeited' ? 'deposit.forfeited' : 'deposit.refunded',
+      tenantId,
+      entityId: deposit.id,
+      entityType: 'deposit',
+      amountKobo: deposit.amountKobo,
+      currency: 'NGN',
+      metadata: {
+        appointmentId,
+        cancellationFeeKobo: deposit.cancellationFeeKobo,
+        refundKobo: Math.max(0, refundKobo),
+      },
+      occurredAt: now,
+    },
+  );
 
   return c.json({
     success: true,

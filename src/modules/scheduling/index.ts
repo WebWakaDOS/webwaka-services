@@ -14,6 +14,14 @@
  *       - mobile (optional)         — "1" to enable travel-time calculation
  *       - clientLat/clientLng       — client GPS coordinates (required if mobile=1)
  *       - staffLat/staffLng         — staff home/base GPS coordinates (required if mobile=1)
+ *
+ *   GET /api/scheduling/available-staff
+ *     WW-SVC-004: Find all staff members who have open slots on a given date/duration.
+ *     Query params:
+ *       - date (required)       — ISO date in WAT, e.g. "2025-04-14"
+ *       - duration (required)   — service duration in minutes
+ *       - serviceId (optional)  — filter staff by skill/service match
+ *       - buffer (optional)     — buffer minutes between appointments (default: 15)
  */
 
 import { Hono } from 'hono';
@@ -22,6 +30,8 @@ import type { Bindings, AppVariables } from '../../core/types';
 import { calculateAvailableSlots } from './engine';
 
 export const schedulingRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
+
+// ─── Available Slots for a Staff Member ───────────────────────────────────────
 
 schedulingRouter.get('/slots', requireRole(['admin', 'manager', 'consultant']), async (c) => {
   const tenantId = c.get('user').tenantId;
@@ -92,6 +102,107 @@ schedulingRouter.get('/slots', requireRole(['admin', 'manager', 'consultant']), 
       bufferMinutes,
       isMobile,
       totalSlots: slots.length,
+    },
+  });
+});
+
+// ─── Available Staff for a Date + Duration (WW-SVC-004) ───────────────────────
+// Returns a list of active staff members who have at least one open slot
+// on the given date for the requested service duration.
+// Optionally filters by service if a services catalog entry is provided.
+
+schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consultant']), async (c) => {
+  const tenantId = c.get('user').tenantId;
+
+  const date = c.req.query('date');
+  const durationStr = c.req.query('duration');
+  const serviceId = c.req.query('serviceId');
+
+  if (!date || !durationStr) {
+    return c.json({ error: 'date and duration are required query params' }, 400);
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return c.json({ error: 'date must be in YYYY-MM-DD format' }, 400);
+  }
+
+  const serviceDurationMinutes = parseInt(durationStr, 10);
+  if (isNaN(serviceDurationMinutes) || serviceDurationMinutes <= 0) {
+    return c.json({ error: 'duration must be a positive integer (minutes)' }, 400);
+  }
+
+  const bufferStr = c.req.query('buffer');
+  const bufferMinutes = bufferStr ? parseInt(bufferStr, 10) : 15;
+
+  // If serviceId is provided, look up the service to verify it exists
+  let resolvedDuration = serviceDurationMinutes;
+  if (serviceId) {
+    const service = await c.env.DB.prepare(
+      'SELECT durationMinutes FROM services WHERE id = ? AND tenantId = ? AND isActive = 1',
+    )
+      .bind(serviceId, tenantId)
+      .first<{ durationMinutes: number }>();
+
+    if (!service) return c.json({ error: 'Service not found or inactive' }, 404);
+    // Use the service's configured duration if no override was passed
+    resolvedDuration = serviceDurationMinutes || service.durationMinutes;
+  }
+
+  // Fetch all active staff for this tenant
+  const { results: allStaff } = await c.env.DB.prepare(
+    "SELECT id, name, email, phone, role, skills FROM staff WHERE tenantId = ? AND status = 'active' ORDER BY name ASC",
+  )
+    .bind(tenantId)
+    .all<{ id: string; name: string; email: string; phone: string; role: string; skills: string }>();
+
+  if (allStaff.length === 0) {
+    return c.json({ data: [], meta: { date, duration: resolvedDuration, staffChecked: 0 } });
+  }
+
+  // For each staff member, calculate their available slots and include those with at least 1
+  const availableStaff: Array<{
+    staffId: string;
+    name: string;
+    role: string;
+    availableSlots: number;
+    firstSlotUtc: string | null;
+  }> = [];
+
+  for (const staff of allStaff) {
+    try {
+      const slots = await calculateAvailableSlots({
+        db: c.env.DB,
+        tenantId,
+        staffId: staff.id,
+        date,
+        serviceDurationMinutes: resolvedDuration,
+        bufferMinutes,
+        isMobile: false,
+      });
+
+      if (slots.length > 0) {
+        availableStaff.push({
+          staffId: staff.id,
+          name: staff.name,
+          role: staff.role,
+          availableSlots: slots.length,
+          firstSlotUtc: slots[0]?.startUtc ?? null,
+        });
+      }
+    } catch {
+      // Skip staff members with scheduling errors (e.g. no availability configured)
+    }
+  }
+
+  return c.json({
+    data: availableStaff,
+    meta: {
+      date,
+      duration: resolvedDuration,
+      bufferMinutes,
+      serviceId: serviceId ?? null,
+      staffChecked: allStaff.length,
+      staffAvailable: availableStaff.length,
     },
   });
 });

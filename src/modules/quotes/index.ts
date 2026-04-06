@@ -25,6 +25,7 @@ import { Hono } from 'hono';
 import { requireRole } from '@webwaka/core';
 import type { Bindings, AppVariables, QuoteStatus } from '../../core/types';
 import { sendWhatsAppMessage } from '../../core/whatsapp';
+import { emitLedgerEvent } from '../../core/central-mgmt-client';
 
 const VALID_STATUSES: readonly QuoteStatus[] = ['draft', 'sent', 'accepted', 'rejected', 'expired'];
 
@@ -266,6 +267,32 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   )
     .bind(...vals)
     .run();
+
+  // Emit ledger event when quote is accepted (WW-SVC-003)
+  if (body.status === 'accepted') {
+    const freshQuote = await c.env.DB.prepare(
+      'SELECT id, totalKobo, clientId, service FROM quotes WHERE id = ? AND tenantId = ?',
+    )
+      .bind(id, tenantId)
+      .first<{ id: string; totalKobo: number; clientId: string | null; service: string }>();
+
+    if (freshQuote) {
+      await emitLedgerEvent(
+        { CENTRAL_MGMT_URL: c.env.CENTRAL_MGMT_URL, INTER_SERVICE_SECRET: c.env.INTER_SERVICE_SECRET },
+        {
+          eventType: 'quote.accepted',
+          tenantId,
+          entityId: freshQuote.id,
+          entityType: 'quote',
+          amountKobo: freshQuote.totalKobo,
+          currency: 'NGN',
+          clientId: freshQuote.clientId ?? undefined,
+          metadata: { service: freshQuote.service },
+          occurredAt: new Date().toISOString(),
+        },
+      );
+    }
+  }
 
   return c.json({ success: true });
 });

@@ -23,6 +23,12 @@ export interface Bindings {
   AI_PLATFORM_URL: string;
   /** Inter-service secret for authenticating calls to webwaka-ai-platform */
   INTER_SERVICE_SECRET: string;
+  /**
+   * URL of webwaka-central-mgmt for financial ledger event emission.
+   * WW-SVC-003 / WW-SVC-007: Required for ledger integration.
+   * Optional — if not set, ledger events are logged but not sent.
+   */
+  CENTRAL_MGMT_URL?: string;
 }
 
 /**
@@ -43,6 +49,8 @@ export type QuoteStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
 export type DepositStatus = 'pending' | 'paid' | 'refunded' | 'forfeited';
 export type ReminderStatus = 'scheduled' | 'sent' | 'failed' | 'cancelled';
 export type ReminderChannel = 'sms' | 'whatsapp' | 'email';
+export type TaskStatus = 'todo' | 'in_progress' | 'done' | 'blocked';
+export type MilestoneStatus = 'pending' | 'achieved' | 'missed';
 
 /**
  * WhatsApp conversational state machine states.
@@ -64,6 +72,7 @@ export interface Appointment {
   tenantId: string;
   clientPhone: string;
   clientName: string | null;
+  clientId: string | null;
   service: string;
   scheduledAt: string;
   durationMinutes: number;
@@ -74,6 +83,8 @@ export interface Appointment {
   locationLat: number | null;
   locationLng: number | null;
   depositId: string | null;
+  /** External calendar event ID for bidirectional sync (WW-SVC-001) */
+  calendarEventId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -113,21 +124,60 @@ export interface Project {
   budgetKobo: number; // ALWAYS kobo — Invariant 5
   startDate: string;
   endDate: string;
+  tags: string; // JSON-encoded string[]
   createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A task within a project. Assigned to a specific staff member.
+ */
+export interface ProjectTask {
+  id: string;
+  tenantId: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  assignedStaffId: string | null;
+  status: TaskStatus;
+  dueDate: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A delivery milestone within a project. May have a payment amount.
+ */
+export interface ProjectMilestone {
+  id: string;
+  tenantId: string;
+  projectId: string;
+  name: string;
+  description: string | null;
+  dueDate: string;
+  status: MilestoneStatus;
+  amountKobo: number; // ALWAYS kobo — Invariant 5
+  achievedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Invoice {
   id: string;
   tenantId: string;
-  projectId: string;
+  projectId: string | null;
   clientId: string;
   invoiceNumber: string;
   amountKobo: number; // ALWAYS kobo
-  taxKobo: number; // ALWAYS kobo
-  totalKobo: number; // ALWAYS kobo
+  taxKobo: number;    // ALWAYS kobo
+  totalKobo: number;  // ALWAYS kobo
   status: InvoiceStatus;
   dueDate: string;
+  notes: string | null;
+  paidAt: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 /**
@@ -228,6 +278,39 @@ export interface ReminderLog {
   status: ReminderStatus;
   sentAt: string | null;
   errorMessage: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * A service offered by a tenant. Used by scheduling engine and external API.
+ * basePriceKobo is always in kobo — Invariant 5.
+ */
+export interface Service {
+  id: string;
+  tenantId: string;
+  name: string;
+  description: string | null;
+  durationMinutes: number;
+  basePriceKobo: number; // ALWAYS kobo — Invariant 5
+  isActive: number;      // 0 | 1 SQLite boolean
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * An API key for external booking platform integration (WW-SVC-008).
+ * The plaintext key is NEVER stored — only the SHA-256 hash.
+ */
+export interface ApiKey {
+  id: string;
+  tenantId: string;
+  label: string;
+  keyHashSha256: string;   // SHA-256 hex — never plaintext
+  scopes: string;          // comma-separated list
+  isActive: number;        // 0 | 1 SQLite boolean
+  lastUsedAt: string | null;
+  expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

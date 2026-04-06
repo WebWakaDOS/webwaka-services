@@ -60,3 +60,4 @@ ENVIRONMENT = "production"
 # TERMII_WHATSAPP_SENDER_ID    — optional: Termii sender ID for WhatsApp Business channel
 # AI_PLATFORM_URL              — URL of the webwaka-ai-platform worker
 # INTER_SERVICE_SECRET         — inter-service auth secret for webwaka-ai-platform calls
+# CENTRAL_MGMT_URL             — URL of webwaka-central-mgmt for financial ledger events (WW-SVC-003/007)

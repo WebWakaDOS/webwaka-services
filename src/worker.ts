@@ -26,6 +26,9 @@ import { quotesRouter } from './modules/quotes/index';
 import { depositsRouter } from './modules/deposits/index';
 import { remindersRouter } from './modules/reminders/index';
 import { chatbotRouter } from './modules/support/chatbot';
+import { servicesRouter } from './modules/services/index';
+import { apiKeysRouter } from './modules/api-keys/index';
+import { externalRouter } from './modules/external/index';
 
 const app = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -64,6 +67,14 @@ app.route('/api/deposits', depositsRouter);
 // ─── Phase 3: Reminders ───────────────────────────────────────────────────────
 app.route('/api/reminders', remindersRouter);
 
+// ─── Phase 4: Services Catalog ────────────────────────────────────────────────
+// WW-SVC-008: Tenant-specific service definitions used by scheduling + external API
+app.route('/api/services', servicesRouter);
+
+// ─── Phase 4: API Key Management (admin only) ─────────────────────────────────
+// WW-SVC-008: Admins create/revoke API keys for external booking integrations
+app.route('/api/api-keys', apiKeysRouter);
+
 // ─── WhatsApp Webhook (unauthenticated — secured by WHATSAPP_VERIFY_TOKEN) ───
 // Endpoint: /webhook/whatsapp/:tenantId
 // GET  → Meta hub.challenge verification
@@ -79,6 +90,14 @@ app.route('/webhook/whatsapp', whatsappRouter);
 // Rate-limited to prevent abuse (20 messages/min per tenant)
 app.use('/webhook/support/*', rateLimit({ limit: 20, windowSeconds: 60, keyPrefix: 'support-bot' }));
 app.route('/webhook/support', chatbotRouter);
+
+// ─── External Booking API (API Key authenticated — not JWT) ───────────────────
+// WW-SVC-008: Third-party booking platform integration.
+// Authentication: Authorization: ApiKey <key> header.
+// Tenancy is resolved from the API key record — no JWT required.
+// Rate-limited at 60 requests/min to prevent partner API abuse.
+app.use('/external/*', rateLimit({ limit: 60, windowSeconds: 60, keyPrefix: 'external-api' }));
+app.route('/external', externalRouter);
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.notFound((c) => c.json({ error: 'Not found' }, 404));
