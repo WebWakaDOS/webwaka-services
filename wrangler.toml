@@ -3,36 +3,14 @@ main = "src/worker.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
-# ─── D1 Migrations ────────────────────────────────────────────────────────────
-# wrangler d1 migrations apply <database_name> --env <staging|production> --remote
-[[migrations]]
-tag = "v0001"
-new_sql_file = "migrations/0001_initial_schema.sql"
-
-[[migrations]]
-tag = "v0002"
-new_sql_file = "migrations/0002_appointments_whatsapp.sql"
-
-[[migrations]]
-tag = "v0003"
-new_sql_file = "migrations/0003_staff_scheduling_quotes_deposits_reminders.sql"
-
-[[migrations]]
-tag = "v0004"
-new_sql_file = "migrations/0004_extensions.sql"
-
-[[migrations]]
-tag = "v0005"
-new_sql_file = "migrations/0005_fix_invoices_projectid_nullable.sql"
-
 # ─── Staging Environment ──────────────────────────────────────────────────────
 [env.staging]
 name = "webwaka-services-staging"
 
 [[env.staging.d1_databases]]
 binding = "DB"
-database_name = "webwaka-services-db-staging"
-database_id = "REPLACE_WITH_SERVICES_STAGING_DB_ID"
+database_name = "modules_prod"
+database_id = "ee93377c-8000-45d6-ae54-f0d4c588bf04"
 
 [[env.staging.kv_namespaces]]
 binding = "SESSIONS_KV"
@@ -55,8 +33,8 @@ name = "webwaka-services-production"
 
 [[env.production.d1_databases]]
 binding = "DB"
-database_name = "webwaka-services-db-prod"
-database_id = "REPLACE_WITH_SERVICES_PROD_DB_ID"
+database_name = "modules_prod"
+database_id = "ee93377c-8000-45d6-ae54-f0d4c588bf04"
 
 [[env.production.kv_namespaces]]
 binding = "SESSIONS_KV"
