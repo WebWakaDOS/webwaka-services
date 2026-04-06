@@ -1,17 +1,17 @@
 /**
  * Staff Management Module — WebWaka Services Suite
  *
- * Manages staff members and their individual weekly availability calendars.
+ * Manages svc_staff members and their individual weekly availability calendars.
  * Tenant isolation is enforced via JWT (tenantId NEVER from headers).
  *
  * Routes:
- *   GET    /api/staff                        — list active staff
- *   POST   /api/staff                        — create staff member
- *   GET    /api/staff/:id                    — get single staff member
- *   PATCH  /api/staff/:id                    — update staff details
- *   DELETE /api/staff/:id                    — deactivate staff member
- *   GET    /api/staff/:id/availability       — get weekly availability windows
- *   PUT    /api/staff/:id/availability       — replace weekly availability windows
+ *   GET    /api/svc_staff                        — list active svc_staff
+ *   POST   /api/svc_staff                        — create svc_staff member
+ *   GET    /api/svc_staff/:id                    — get single svc_staff member
+ *   PATCH  /api/svc_staff/:id                    — update svc_staff details
+ *   DELETE /api/svc_staff/:id                    — deactivate svc_staff member
+ *   GET    /api/svc_staff/:id/availability       — get weekly availability windows
+ *   PUT    /api/svc_staff/:id/availability       — replace weekly availability windows
  */
 
 import { Hono } from 'hono';
@@ -36,7 +36,7 @@ staffRouter.get('/', requireRole(['admin', 'manager']), async (c) => {
   const tenantId = c.get('user').tenantId;
   const status = c.req.query('status') ?? 'active';
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM staff WHERE tenantId = ? AND status = ? ORDER BY name ASC',
+    'SELECT * FROM svc_staff WHERE tenantId = ? AND status = ? ORDER BY name ASC',
   )
     .bind(tenantId, status)
     .all();
@@ -49,7 +49,7 @@ staffRouter.get('/:id', requireRole(['admin', 'manager']), async (c) => {
   const tenantId = c.get('user').tenantId;
   const id = c.req.param('id');
   const row = await c.env.DB.prepare(
-    'SELECT * FROM staff WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_staff WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -82,7 +82,7 @@ staffRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const skills = JSON.stringify(body.skills ?? []);
 
   await c.env.DB.prepare(
-    `INSERT INTO staff
+    `INSERT INTO svc_staff
        (id, tenantId, name, email, phone, role, skills, status, commissionBps, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`,
   )
@@ -110,7 +110,7 @@ staffRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM staff WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_staff WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -146,7 +146,7 @@ staffRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE staff SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_staff SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -161,14 +161,14 @@ staffRouter.delete('/:id', requireRole(['admin']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM staff WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_staff WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
   if (!existing) return c.json({ error: 'Staff member not found' }, 404);
 
   await c.env.DB.prepare(
-    "UPDATE staff SET status = 'inactive', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_staff SET status = 'inactive', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(new Date().toISOString(), id, tenantId)
     .run();
@@ -183,14 +183,14 @@ staffRouter.get('/:id/availability', requireRole(['admin', 'manager', 'consultan
   const staffId = c.req.param('id');
 
   const staffExists = await c.env.DB.prepare(
-    'SELECT id FROM staff WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_staff WHERE id = ? AND tenantId = ?',
   )
     .bind(staffId, tenantId)
     .first();
   if (!staffExists) return c.json({ error: 'Staff member not found' }, 404);
 
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM staff_availability WHERE staffId = ? ORDER BY dayOfWeek ASC',
+    'SELECT * FROM svc_staff_availability WHERE staffId = ? ORDER BY dayOfWeek ASC',
   )
     .bind(staffId)
     .all();
@@ -198,14 +198,14 @@ staffRouter.get('/:id/availability', requireRole(['admin', 'manager', 'consultan
   return c.json({ data: results });
 });
 
-// ─── Set Availability (replace all windows for staff member) ──────────────────
+// ─── Set Availability (replace all windows for svc_staff member) ──────────────────
 
 staffRouter.put('/:id/availability', requireRole(['admin', 'manager']), async (c) => {
   const tenantId = c.get('user').tenantId;
   const staffId = c.req.param('id');
 
   const staffExists = await c.env.DB.prepare(
-    'SELECT id FROM staff WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_staff WHERE id = ? AND tenantId = ?',
   )
     .bind(staffId, tenantId)
     .first();
@@ -231,9 +231,9 @@ staffRouter.put('/:id/availability', requireRole(['admin', 'manager']), async (c
     }
   }
 
-  // Replace all existing availability for this staff member atomically
+  // Replace all existing availability for this svc_staff member atomically
   await c.env.DB.prepare(
-    'DELETE FROM staff_availability WHERE staffId = ?',
+    'DELETE FROM svc_staff_availability WHERE staffId = ?',
   )
     .bind(staffId)
     .run();
@@ -241,7 +241,7 @@ staffRouter.put('/:id/availability', requireRole(['admin', 'manager']), async (c
   for (const window of body.availability) {
     const id = crypto.randomUUID();
     await c.env.DB.prepare(
-      'INSERT INTO staff_availability (id, tenantId, staffId, dayOfWeek, startTime, endTime) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO svc_staff_availability (id, tenantId, staffId, dayOfWeek, startTime, endTime) VALUES (?, ?, ?, ?, ?, ?)',
     )
       .bind(id, tenantId, staffId, window.dayOfWeek, window.startTime, window.endTime)
       .run();

@@ -1,16 +1,16 @@
 /**
  * Services Catalog Module — WebWaka Services Suite
  *
- * Tenant-specific catalog of offered services: name, duration, base price.
+ * Tenant-specific catalog of offered svc_services: name, duration, base price.
  * Used by the scheduling engine and external booking API to resolve service
  * definitions without hardcoding them.
  *
  * Routes:
- *   GET    /api/services              — list services (active by default)
- *   POST   /api/services              — create service
- *   GET    /api/services/:id          — get single service
- *   PATCH  /api/services/:id          — update service
- *   DELETE /api/services/:id          — deactivate service
+ *   GET    /api/svc_services              — list svc_services (active by default)
+ *   POST   /api/svc_services              — create service
+ *   GET    /api/svc_services/:id          — get single service
+ *   PATCH  /api/svc_services/:id          — update service
+ *   DELETE /api/svc_services/:id          — deactivate service
  */
 
 import { Hono } from 'hono';
@@ -25,7 +25,7 @@ servicesRouter.get('/', requireRole(['admin', 'manager', 'consultant']), async (
   const tenantId = c.get('user').tenantId;
   const activeOnly = c.req.query('active') !== 'false';
 
-  let query = 'SELECT * FROM services WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_services WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (activeOnly) { query += ' AND isActive = 1'; }
@@ -42,7 +42,7 @@ servicesRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), asyn
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM services WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_services WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -76,7 +76,7 @@ servicesRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
 
   // Check for duplicate name within tenant
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM services WHERE tenantId = ? AND name = ?',
+    'SELECT id FROM svc_services WHERE tenantId = ? AND name = ?',
   )
     .bind(tenantId, body.name)
     .first();
@@ -88,7 +88,7 @@ servicesRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO services
+    `INSERT INTO svc_services
        (id, tenantId, name, description, durationMinutes, basePriceKobo, isActive, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`,
   )
@@ -105,7 +105,7 @@ servicesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM services WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_services WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -141,7 +141,7 @@ servicesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE services SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_services SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -156,14 +156,14 @@ servicesRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM services WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_services WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
   if (!existing) return c.json({ error: 'Service not found' }, 404);
 
   await c.env.DB.prepare(
-    'UPDATE services SET isActive = 0, updatedAt = ? WHERE id = ? AND tenantId = ?',
+    'UPDATE svc_services SET isActive = 0, updatedAt = ? WHERE id = ? AND tenantId = ?',
   )
     .bind(new Date().toISOString(), id, tenantId)
     .run();

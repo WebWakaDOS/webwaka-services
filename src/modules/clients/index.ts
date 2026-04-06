@@ -5,12 +5,12 @@
  * search, and view service history. Tenant isolation via JWT.
  *
  * Routes:
- *   GET    /api/clients                  — list clients (with optional ?search=)
- *   POST   /api/clients                  — create client
- *   GET    /api/clients/:id              — get single client
- *   PATCH  /api/clients/:id              — update client details
- *   DELETE /api/clients/:id              — deactivate client (soft delete)
- *   GET    /api/clients/:id/history      — service history (appointments + invoices + projects)
+ *   GET    /api/svc_clients                  — list svc_clients (with optional ?search=)
+ *   POST   /api/svc_clients                  — create client
+ *   GET    /api/svc_clients/:id              — get single client
+ *   PATCH  /api/svc_clients/:id              — update client details
+ *   DELETE /api/svc_clients/:id              — deactivate client (soft delete)
+ *   GET    /api/svc_clients/:id/history      — service history (svc_appointments + svc_invoices + svc_projects)
  */
 
 import { Hono } from 'hono';
@@ -27,7 +27,7 @@ clientsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), async (c
   const search = c.req.query('search');
   const status = c.req.query('status') ?? 'active';
 
-  let query = 'SELECT * FROM clients WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_clients WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (status !== 'all') {
@@ -55,7 +55,7 @@ clientsRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), async
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM clients WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_clients WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -85,7 +85,7 @@ clientsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO clients
+    `INSERT INTO svc_clients
        (id, tenantId, name, email, phone, company, address, status, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?)`,
   )
@@ -113,7 +113,7 @@ clientsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM clients WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_clients WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -151,7 +151,7 @@ clientsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE clients SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_clients SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -167,7 +167,7 @@ clientsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM clients WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_clients WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -175,7 +175,7 @@ clientsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
   if (!existing) return c.json({ error: 'Client not found' }, 404);
 
   await c.env.DB.prepare(
-    "UPDATE clients SET status = 'inactive', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_clients SET status = 'inactive', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(new Date().toISOString(), id, tenantId)
     .run();
@@ -184,7 +184,7 @@ clientsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
 });
 
 // ─── Service History ──────────────────────────────────────────────────────────
-// Returns a unified timeline of the client's appointments, invoices, and projects.
+// Returns a unified timeline of the client's svc_appointments, svc_invoices, and svc_projects.
 
 clientsRouter.get('/:id/history', requireRole(['admin', 'manager', 'consultant']), async (c) => {
   const user = c.get('user');
@@ -193,18 +193,18 @@ clientsRouter.get('/:id/history', requireRole(['admin', 'manager', 'consultant']
 
   // Verify client exists and belongs to tenant
   const client = await c.env.DB.prepare(
-    'SELECT id, name FROM clients WHERE id = ? AND tenantId = ?',
+    'SELECT id, name FROM svc_clients WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{ id: string; name: string }>();
 
   if (!client) return c.json({ error: 'Client not found' }, 404);
 
-  // Fetch appointments linked to this client by clientId or by clientPhone match
+  // Fetch svc_appointments linked to this client by clientId or by clientPhone match
   const [appointmentsResult, invoicesResult, projectsResult] = await Promise.all([
     c.env.DB.prepare(
       `SELECT id, service, scheduledAt, status, durationMinutes, notes
-       FROM appointments
+       FROM svc_appointments
        WHERE tenantId = ? AND clientId = ?
        ORDER BY scheduledAt DESC LIMIT 50`,
     )
@@ -213,7 +213,7 @@ clientsRouter.get('/:id/history', requireRole(['admin', 'manager', 'consultant']
 
     c.env.DB.prepare(
       `SELECT id, invoiceNumber, totalKobo, status, dueDate, createdAt
-       FROM invoices
+       FROM svc_invoices
        WHERE tenantId = ? AND clientId = ?
        ORDER BY createdAt DESC LIMIT 50`,
     )
@@ -222,7 +222,7 @@ clientsRouter.get('/:id/history', requireRole(['admin', 'manager', 'consultant']
 
     c.env.DB.prepare(
       `SELECT id, name, status, budgetKobo, startDate, endDate
-       FROM projects
+       FROM svc_projects
        WHERE tenantId = ? AND clientId = ?
        ORDER BY createdAt DESC LIMIT 50`,
     )
@@ -233,9 +233,9 @@ clientsRouter.get('/:id/history', requireRole(['admin', 'manager', 'consultant']
   return c.json({
     data: {
       client,
-      appointments: appointmentsResult.results,
-      invoices: invoicesResult.results,
-      projects: projectsResult.results,
+      svc_appointments: appointmentsResult.results,
+      svc_invoices: invoicesResult.results,
+      svc_projects: projectsResult.results,
       totals: {
         appointmentCount: appointmentsResult.results.length,
         invoiceCount: invoicesResult.results.length,

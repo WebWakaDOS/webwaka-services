@@ -1,27 +1,27 @@
 /**
  * Scheduling Module — REST API for the Dynamic Scheduling Engine
  *
- * Exposes the scheduling engine to authenticated callers, enabling clients
+ * Exposes the scheduling engine to authenticated callers, enabling svc_clients
  * and front-ends to discover available appointment slots in real time.
  *
  * Routes:
  *   GET /api/scheduling/slots
  *     Query params:
- *       - staffId (required)        — staff member UUID
+ *       - staffId (required)        — svc_staff member UUID
  *       - date (required)           — ISO date in WAT, e.g. "2025-04-14"
  *       - duration (required)       — service duration in minutes
- *       - buffer (optional)         — buffer minutes between appointments (default: 15)
+ *       - buffer (optional)         — buffer minutes between svc_appointments (default: 15)
  *       - mobile (optional)         — "1" to enable travel-time calculation
  *       - clientLat/clientLng       — client GPS coordinates (required if mobile=1)
- *       - staffLat/staffLng         — staff home/base GPS coordinates (required if mobile=1)
+ *       - staffLat/staffLng         — svc_staff home/base GPS coordinates (required if mobile=1)
  *
- *   GET /api/scheduling/available-staff
- *     WW-SVC-004: Find all staff members who have open slots on a given date/duration.
+ *   GET /api/scheduling/available-svc_staff
+ *     WW-SVC-004: Find all svc_staff members who have open slots on a given date/duration.
  *     Query params:
  *       - date (required)       — ISO date in WAT, e.g. "2025-04-14"
  *       - duration (required)   — service duration in minutes
- *       - serviceId (optional)  — filter staff by skill/service match
- *       - buffer (optional)     — buffer minutes between appointments (default: 15)
+ *       - serviceId (optional)  — filter svc_staff by skill/service match
+ *       - buffer (optional)     — buffer minutes between svc_appointments (default: 15)
  */
 
 import { Hono } from 'hono';
@@ -107,11 +107,11 @@ schedulingRouter.get('/slots', requireRole(['admin', 'manager', 'consultant']), 
 });
 
 // ─── Available Staff for a Date + Duration (WW-SVC-004) ───────────────────────
-// Returns a list of active staff members who have at least one open slot
+// Returns a list of active svc_staff members who have at least one open slot
 // on the given date for the requested service duration.
-// Optionally filters by service if a services catalog entry is provided.
+// Optionally filters by service if a svc_services catalog entry is provided.
 
-schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consultant']), async (c) => {
+schedulingRouter.get('/available-svc_staff', requireRole(['admin', 'manager', 'consultant']), async (c) => {
   const tenantId = c.get('user').tenantId;
 
   const date = c.req.query('date');
@@ -138,7 +138,7 @@ schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consu
   let resolvedDuration = serviceDurationMinutes;
   if (serviceId) {
     const service = await c.env.DB.prepare(
-      'SELECT durationMinutes FROM services WHERE id = ? AND tenantId = ? AND isActive = 1',
+      'SELECT durationMinutes FROM svc_services WHERE id = ? AND tenantId = ? AND isActive = 1',
     )
       .bind(serviceId, tenantId)
       .first<{ durationMinutes: number }>();
@@ -148,9 +148,9 @@ schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consu
     resolvedDuration = serviceDurationMinutes || service.durationMinutes;
   }
 
-  // Fetch all active staff for this tenant
+  // Fetch all active svc_staff for this tenant
   const { results: allStaff } = await c.env.DB.prepare(
-    "SELECT id, name, email, phone, role, skills FROM staff WHERE tenantId = ? AND status = 'active' ORDER BY name ASC",
+    "SELECT id, name, email, phone, role, skills FROM svc_staff WHERE tenantId = ? AND status = 'active' ORDER BY name ASC",
   )
     .bind(tenantId)
     .all<{ id: string; name: string; email: string; phone: string; role: string; skills: string }>();
@@ -159,7 +159,7 @@ schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consu
     return c.json({ data: [], meta: { date, duration: resolvedDuration, staffChecked: 0 } });
   }
 
-  // For each staff member, calculate their available slots and include those with at least 1
+  // For each svc_staff member, calculate their available slots and include those with at least 1
   const availableStaff: Array<{
     staffId: string;
     name: string;
@@ -168,12 +168,12 @@ schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consu
     firstSlotUtc: string | null;
   }> = [];
 
-  for (const staff of allStaff) {
+  for (const svc_staff of allStaff) {
     try {
       const slots = await calculateAvailableSlots({
         db: c.env.DB,
         tenantId,
-        staffId: staff.id,
+        staffId: svc_staff.id,
         date,
         serviceDurationMinutes: resolvedDuration,
         bufferMinutes,
@@ -182,15 +182,15 @@ schedulingRouter.get('/available-staff', requireRole(['admin', 'manager', 'consu
 
       if (slots.length > 0) {
         availableStaff.push({
-          staffId: staff.id,
-          name: staff.name,
-          role: staff.role,
+          staffId: svc_staff.id,
+          name: svc_staff.name,
+          role: svc_staff.role,
           availableSlots: slots.length,
           firstSlotUtc: slots[0]?.startUtc ?? null,
         });
       }
     } catch {
-      // Skip staff members with scheduling errors (e.g. no availability configured)
+      // Skip svc_staff members with scheduling errors (e.g. no availability configured)
     }
   }
 

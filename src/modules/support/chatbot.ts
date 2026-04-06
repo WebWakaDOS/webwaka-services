@@ -13,7 +13,7 @@
  *   GET  /webhook/support/:tenantId — verify challenge (Meta hub.challenge compatible)
  *   POST /webhook/support/:tenantId — receive message, return AI response
  *
- * AI Platform: uses capabilityId 'ai.services.support' for entitlement routing.
+ * AI Platform: uses capabilityId 'ai.svc_services.support' for entitlement routing.
  * Fallback: if AI platform is unreachable the bot replies with a polite error
  * message directing the customer to call — it never silently drops messages.
  *
@@ -26,7 +26,7 @@ import { Hono } from 'hono';
 import type { Bindings, AppVariables } from '../../core/types';
 import { getAICompletion } from '../../core/ai-platform-client';
 import { sendWhatsAppMessage, verifyWebhookChallenge, parseTermiiInbound } from '../../core/whatsapp';
-import { KNOWN_SERVICES } from '../appointments/stateMachine';
+import { KNOWN_SERVICES } from '../svc_appointments/stateMachine';
 
 export const chatbotRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -35,12 +35,12 @@ export const chatbotRouter = new Hono<{ Bindings: Bindings; Variables: AppVariab
 export const BASE_FAQ = `
 You are a friendly, professional customer support assistant for a local service business using WebWaka.
 You help customers with:
-- Booking enquiries (available services, how to book, rescheduling, cancellations)
+- Booking enquiries (available svc_services, how to book, rescheduling, cancellations)
 - Pricing and quote questions
 - Business hours and location questions
-- General FAQs about services
+- General FAQs about svc_services
 
-Available services: ${KNOWN_SERVICES.join(', ')}.
+Available svc_services: ${KNOWN_SERVICES.join(', ')}.
 
 Key policies:
 - Deposits may be required to confirm a booking.
@@ -142,7 +142,7 @@ chatbotRouter.post('/:tenantId', async (c) => {
       {
         systemPrompt: BASE_FAQ,
         prompt: userMessage,
-        capabilityId: 'ai.services.support',
+        capabilityId: 'ai.svc_services.support',
         maxTokens: 300,
         temperature: 0.6,
       },

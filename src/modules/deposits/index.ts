@@ -1,7 +1,7 @@
 /**
  * Deposit & Cancellation Fees Module — WebWaka Services Suite
  *
- * Manages deposit charges linked to appointments and enforces configurable
+ * Manages deposit charges linked to svc_appointments and enforces configurable
  * cancellation fee policies. Integrates with Paystack for Nigerian payment
  * processing — all amounts in kobo, Invariant 5: Nigeria First.
  *
@@ -9,12 +9,12 @@
  * deposit payment verification and on cancellation/forfeit.
  *
  * Routes:
- *   POST   /api/deposits                             — create a deposit & initiate payment
- *   GET    /api/deposits                             — list deposits for the tenant
- *   GET    /api/deposits/:id                         — get single deposit
- *   POST   /api/deposits/:id/verify                  — verify Paystack payment
- *   GET    /api/deposits/appointment/:appointmentId  — get deposit for an appointment
- *   POST   /api/deposits/appointment/:appointmentId/cancel — cancel with fee enforcement
+ *   POST   /api/svc_deposits                             — create a deposit & initiate payment
+ *   GET    /api/svc_deposits                             — list svc_deposits for the tenant
+ *   GET    /api/svc_deposits/:id                         — get single deposit
+ *   POST   /api/svc_deposits/:id/verify                  — verify Paystack payment
+ *   GET    /api/svc_deposits/appointment/:appointmentId  — get deposit for an appointment
+ *   POST   /api/svc_deposits/appointment/:appointmentId/cancel — cancel with fee enforcement
  */
 
 import { Hono } from 'hono';
@@ -55,7 +55,7 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   }
 
   const appt = await c.env.DB.prepare(
-    'SELECT id, status FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT id, status FROM svc_appointments WHERE id = ? AND tenantId = ?',
   )
     .bind(body.appointmentId, tenantId)
     .first<{ id: string; status: string }>();
@@ -65,7 +65,7 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   }
 
   const existingDeposit = await c.env.DB.prepare(
-    "SELECT id FROM deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
+    "SELECT id FROM svc_deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
   )
     .bind(body.appointmentId)
     .first<{ id: string }>();
@@ -92,14 +92,14 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     paystackRef = payment.data.reference;
     authorizationUrl = payment.data.authorization_url;
   } catch (err) {
-    console.error('[deposits] Paystack init failed:', err);
+    console.error('[svc_deposits] Paystack init failed:', err);
   }
 
   const depositId = crypto.randomUUID();
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO deposits
+    `INSERT INTO svc_deposits
        (id, tenantId, appointmentId, amountKobo, status, paystackReference, cancellationFeeKobo, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
   )
@@ -116,7 +116,7 @@ depositsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
     .run();
 
   await c.env.DB.prepare(
-    'UPDATE appointments SET depositId = ?, updatedAt = ? WHERE id = ? AND tenantId = ?',
+    'UPDATE svc_appointments SET depositId = ?, updatedAt = ? WHERE id = ? AND tenantId = ?',
   )
     .bind(depositId, now, body.appointmentId, tenantId)
     .run();
@@ -151,7 +151,7 @@ depositsRouter.get('/', requireRole(['admin', 'manager']), async (c) => {
   const tenantId = c.get('user').tenantId;
   const status = c.req.query('status');
 
-  let query = 'SELECT * FROM deposits WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_deposits WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
   if (status) { query += ' AND status = ?'; bindings.push(status); }
   query += ' ORDER BY createdAt DESC';
@@ -166,7 +166,7 @@ depositsRouter.get('/:id', requireRole(['admin', 'manager']), async (c) => {
   const tenantId = c.get('user').tenantId;
   const id = c.req.param('id');
   const row = await c.env.DB.prepare(
-    'SELECT * FROM deposits WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_deposits WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -181,7 +181,7 @@ depositsRouter.post('/:id/verify', requireRole(['admin', 'manager']), async (c) 
   const id = c.req.param('id');
 
   const deposit = await c.env.DB.prepare(
-    'SELECT * FROM deposits WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_deposits WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{
@@ -206,20 +206,20 @@ depositsRouter.post('/:id/verify', requireRole(['admin', 'manager']), async (c) 
     verified = result.data.status === 'success' && result.data.amount >= deposit.amountKobo;
     verifiedAmountKobo = result.data.amount;
   } catch (err) {
-    console.error('[deposits] Paystack verify failed:', err);
+    console.error('[svc_deposits] Paystack verify failed:', err);
     return c.json({ error: 'Paystack verification failed' }, 502);
   }
 
   if (verified) {
     const now = new Date().toISOString();
     await c.env.DB.prepare(
-      "UPDATE deposits SET status = 'paid', updatedAt = ? WHERE id = ?",
+      "UPDATE svc_deposits SET status = 'paid', updatedAt = ? WHERE id = ?",
     )
       .bind(now, id)
       .run();
 
     await c.env.DB.prepare(
-      "UPDATE appointments SET status = 'confirmed', updatedAt = ? WHERE id = ? AND tenantId = ?",
+      "UPDATE svc_appointments SET status = 'confirmed', updatedAt = ? WHERE id = ? AND tenantId = ?",
     )
       .bind(now, deposit.appointmentId, tenantId)
       .run();
@@ -251,7 +251,7 @@ depositsRouter.get('/appointment/:appointmentId', requireRole(['admin', 'manager
   const appointmentId = c.req.param('appointmentId');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM deposits WHERE appointmentId = ? AND tenantId = ? ORDER BY createdAt DESC LIMIT 1',
+    'SELECT * FROM svc_deposits WHERE appointmentId = ? AND tenantId = ? ORDER BY createdAt DESC LIMIT 1',
   )
     .bind(appointmentId, tenantId)
     .first();
@@ -267,7 +267,7 @@ depositsRouter.post('/appointment/:appointmentId/cancel', requireRole(['admin', 
   const appointmentId = c.req.param('appointmentId');
 
   const appt = await c.env.DB.prepare(
-    'SELECT id, status FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT id, status FROM svc_appointments WHERE id = ? AND tenantId = ?',
   )
     .bind(appointmentId, tenantId)
     .first<{ id: string; status: string }>();
@@ -280,20 +280,20 @@ depositsRouter.post('/appointment/:appointmentId/cancel', requireRole(['admin', 
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    "UPDATE appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(now, appointmentId, tenantId)
     .run();
 
   // Cancel any pending reminders
   await c.env.DB.prepare(
-    "UPDATE reminder_logs SET status = 'cancelled', updatedAt = ? WHERE appointmentId = ? AND status = 'scheduled'",
+    "UPDATE svc_reminder_logs SET status = 'cancelled', updatedAt = ? WHERE appointmentId = ? AND status = 'scheduled'",
   )
     .bind(now, appointmentId)
     .run();
 
   const deposit = await c.env.DB.prepare(
-    "SELECT * FROM deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
+    "SELECT * FROM svc_deposits WHERE appointmentId = ? AND status IN ('pending', 'paid')",
   )
     .bind(appointmentId)
     .first<{
@@ -311,7 +311,7 @@ depositsRouter.post('/appointment/:appointmentId/cancel', requireRole(['admin', 
   const newDepositStatus = deposit.cancellationFeeKobo > 0 ? 'forfeited' : 'refunded';
 
   await c.env.DB.prepare(
-    'UPDATE deposits SET status = ?, updatedAt = ? WHERE id = ?',
+    'UPDATE svc_deposits SET status = ?, updatedAt = ? WHERE id = ?',
   )
     .bind(newDepositStatus, now, deposit.id)
     .run();

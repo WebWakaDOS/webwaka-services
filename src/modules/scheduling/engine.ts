@@ -1,12 +1,12 @@
 /**
  * Dynamic Scheduling Engine — WebWaka Services Suite
  *
- * Calculates available appointment time slots for a staff member on a given date.
+ * Calculates available appointment time slots for a svc_staff member on a given date.
  * Factors in:
  *   1. Staff's recurring weekly availability windows
- *   2. Existing confirmed/pending appointments (busy periods)
- *   3. Configurable buffer time between appointments
- *   4. Travel time for mobile (field-visit) services — estimated via Haversine
+ *   2. Existing confirmed/pending svc_appointments (busy periods)
+ *   3. Configurable buffer time between svc_appointments
+ *   4. Travel time for mobile (field-visit) svc_services — estimated via Haversine
  *
  * Nigeria-First: all times are interpreted as WAT (UTC+1) and stored/returned
  * as UTC ISO strings to maintain the project's timezone invariant.
@@ -116,8 +116,8 @@ export function formatSlotDisplayWAT(utcDate: Date): string {
  * Generates candidate slots spaced every `slotIntervalMinutes` within a window,
  * then filters out any that overlap with busy periods.
  *
- * @param windowStartUtc  Start of staff availability window (UTC Date)
- * @param windowEndUtc    End of staff availability window (UTC Date)
+ * @param windowStartUtc  Start of svc_staff availability window (UTC Date)
+ * @param windowEndUtc    End of svc_staff availability window (UTC Date)
  * @param totalBlockMinutes  serviceDuration + buffer + optional travel time
  * @param busyPeriods     Sorted list of busy periods to avoid
  * @param slotIntervalMinutes  Step between candidate slot starts (default: 15)
@@ -169,7 +169,7 @@ export function generateSlots(
 // ─── DB-Coupled Functions ─────────────────────────────────────────────────────
 
 /**
- * Fetches confirmed and pending appointments for a staff member on a given date,
+ * Fetches confirmed and pending svc_appointments for a svc_staff member on a given date,
  * returning them as BusyPeriod objects (inclusive of buffer time).
  */
 export async function getStaffBusyPeriods(
@@ -179,14 +179,14 @@ export async function getStaffBusyPeriods(
   isoDateWAT: string,
   bufferMinutes: number,
 ): Promise<BusyPeriod[]> {
-  // Query appointments that overlap with this WAT date.
+  // Query svc_appointments that overlap with this WAT date.
   // WAT date starts at 23:00 previous UTC day, ends at 22:59 same UTC day.
   const watStart = watHHMMtoUTC(isoDateWAT, '00:00');
   const watEnd = new Date(watStart.getTime() + 24 * 60 * 60 * 1000);
 
   const { results } = await db
     .prepare(
-      `SELECT scheduledAt, durationMinutes FROM appointments
+      `SELECT scheduledAt, durationMinutes FROM svc_appointments
        WHERE tenantId = ? AND staffId = ?
          AND status IN ('confirmed', 'pending')
          AND scheduledAt >= ? AND scheduledAt < ?
@@ -203,7 +203,7 @@ export async function getStaffBusyPeriods(
 }
 
 /**
- * Fetches the staff member's availability window for a given day of week.
+ * Fetches the svc_staff member's availability window for a given day of week.
  * dayOfWeek: 0 (Sunday) – 6 (Saturday), matching JS Date.getUTCDay() on WAT date.
  */
 async function getAvailabilityWindow(
@@ -213,7 +213,7 @@ async function getAvailabilityWindow(
 ): Promise<{ startTime: string; endTime: string } | null> {
   const row = await db
     .prepare(
-      'SELECT startTime, endTime FROM staff_availability WHERE staffId = ? AND dayOfWeek = ?',
+      'SELECT startTime, endTime FROM svc_staff_availability WHERE staffId = ? AND dayOfWeek = ?',
     )
     .bind(staffId, dayOfWeek)
     .first<{ startTime: string; endTime: string }>();
@@ -223,14 +223,14 @@ async function getAvailabilityWindow(
 // ─── Main Entry Point ─────────────────────────────────────────────────────────
 
 /**
- * Calculates available time slots for a staff member on a given date.
+ * Calculates available time slots for a svc_staff member on a given date.
  *
  * Returns an empty array if:
- *   - The staff member has no availability window for that day of week
- *   - The day is entirely blocked by existing appointments
+ *   - The svc_staff member has no availability window for that day of week
+ *   - The day is entirely blocked by existing svc_appointments
  *
  * Travel time is added to the total block per slot (not just to the service
- * duration) so subsequent appointments are also protected from overlap.
+ * duration) so subsequent svc_appointments are also protected from overlap.
  */
 export async function calculateAvailableSlots(req: SchedulingRequest): Promise<TimeSlot[]> {
   const {
@@ -259,7 +259,7 @@ export async function calculateAvailableSlots(req: SchedulingRequest): Promise<T
   const windowStartUtc = watHHMMtoUTC(date, window.startTime);
   const windowEndUtc = watHHMMtoUTC(date, window.endTime);
 
-  // Compute travel overhead for mobile services
+  // Compute travel overhead for mobile svc_services
   let travelMinutes = 0;
   if (
     isMobile &&

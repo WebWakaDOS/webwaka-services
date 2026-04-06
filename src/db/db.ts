@@ -22,17 +22,17 @@ interface MutationQueueEntry {
 }
 
 export class ServicesOfflineDB extends Dexie {
-  clients!: Table<Client>;
-  projects!: Table<Project>;
-  invoices!: Table<Invoice>;
+  svc_clients!: Table<Client>;
+  svc_projects!: Table<Project>;
+  svc_invoices!: Table<Invoice>;
   mutationQueue!: Table<MutationQueueEntry>;
 
   constructor() {
-    super('webwaka-services');
+    super('webwaka-svc_services');
     this.version(1).stores({
-      clients: 'id, tenantId, name, email, status',
-      projects: 'id, tenantId, clientId, status',
-      invoices: 'id, tenantId, projectId, clientId, status',
+      svc_clients: 'id, tenantId, name, email, status',
+      svc_projects: 'id, tenantId, clientId, status',
+      svc_invoices: 'id, tenantId, projectId, clientId, status',
       mutationQueue: '++id, tenantId, createdAt',
     });
   }

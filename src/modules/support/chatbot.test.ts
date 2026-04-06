@@ -3,7 +3,7 @@
  *
  * Tests:
  *   1. parseWebWidgetPayload — pure function, no external deps
- *   2. BASE_FAQ — content validation (services list, key policies)
+ *   2. BASE_FAQ — content validation (svc_services list, key policies)
  *   3. AI_FALLBACK_MESSAGE — content and "Please call us" requirement (QA-SRV-3)
  *   4. getAICompletion fallback — verifies bot replies gracefully when AI is unavailable
  *
@@ -13,7 +13,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { parseWebWidgetPayload, BASE_FAQ, AI_FALLBACK_MESSAGE } from './chatbot';
-import { KNOWN_SERVICES } from '../appointments/stateMachine';
+import { KNOWN_SERVICES } from '../svc_appointments/stateMachine';
 
 // ─── parseWebWidgetPayload ─────────────────────────────────────────────────────
 
@@ -26,9 +26,9 @@ describe('parseWebWidgetPayload', () => {
   });
 
   it('parses a payload with message and sessionId', () => {
-    const result = parseWebWidgetPayload({ message: 'What services do you offer?', sessionId: 'sess-abc123' });
+    const result = parseWebWidgetPayload({ message: 'What svc_services do you offer?', sessionId: 'sess-abc123' });
     expect(result).not.toBeNull();
-    expect(result?.message).toBe('What services do you offer?');
+    expect(result?.message).toBe('What svc_services do you offer?');
     expect(result?.sessionId).toBe('sess-abc123');
   });
 
@@ -79,7 +79,7 @@ describe('BASE_FAQ', () => {
     expect(BASE_FAQ.length).toBeGreaterThan(0);
   });
 
-  it('includes all known services', () => {
+  it('includes all known svc_services', () => {
     for (const service of KNOWN_SERVICES) {
       expect(BASE_FAQ).toContain(service);
     }
@@ -147,7 +147,7 @@ describe('chatbot AI fallback (getAICompletion throws)', () => {
     try {
       await mockGetAI(
         { AI_PLATFORM_URL: 'https://ai.test', INTER_SERVICE_SECRET: 'secret', TENANT_ID: 'tenant-1' },
-        { systemPrompt: BASE_FAQ, prompt: 'How do I book?', capabilityId: 'ai.services.support', maxTokens: 300, temperature: 0.6 },
+        { systemPrompt: BASE_FAQ, prompt: 'How do I book?', capabilityId: 'ai.svc_services.support', maxTokens: 300, temperature: 0.6 },
         'tenant-1',
       );
       aiReply = 'AI responded'; // should not reach here
@@ -164,14 +164,14 @@ describe('chatbot AI fallback (getAICompletion throws)', () => {
     const { getAICompletion } = await import('../../core/ai-platform-client');
     const mockGetAI = vi.mocked(getAICompletion);
     mockGetAI.mockResolvedValueOnce({
-      content: 'We offer Consultation and Project Review services.',
+      content: 'We offer Consultation and Project Review svc_services.',
       model: 'mock-model',
       usage: { promptTokens: 10, completionTokens: 20, totalTokens: 30 },
     });
 
     const result = await mockGetAI(
       { AI_PLATFORM_URL: 'https://ai.test', INTER_SERVICE_SECRET: 'secret', TENANT_ID: 'tenant-1' },
-      { systemPrompt: BASE_FAQ, prompt: 'What services do you offer?', capabilityId: 'ai.services.support', maxTokens: 300, temperature: 0.6 },
+      { systemPrompt: BASE_FAQ, prompt: 'What svc_services do you offer?', capabilityId: 'ai.svc_services.support', maxTokens: 300, temperature: 0.6 },
       'tenant-1',
     );
 
@@ -185,7 +185,7 @@ describe('chatbot AI fallback (getAICompletion throws)', () => {
     const systemPrompt = BASE_FAQ;
     expect(systemPrompt).not.toContain(injectionAttempt);
     // User content goes only to `prompt`, not `systemPrompt`
-    const requestBody = { systemPrompt, prompt: injectionAttempt, capabilityId: 'ai.services.support', maxTokens: 300, temperature: 0.6 };
+    const requestBody = { systemPrompt, prompt: injectionAttempt, capabilityId: 'ai.svc_services.support', maxTokens: 300, temperature: 0.6 };
     expect(requestBody.systemPrompt).toBe(BASE_FAQ);
     expect(requestBody.prompt).toBe(injectionAttempt);
   });

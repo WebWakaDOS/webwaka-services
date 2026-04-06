@@ -5,7 +5,7 @@
  * ALL monetary amounts are in kobo (NGN × 100) integers.
  * NEVER pass naira amounts to Paystack — always convert to kobo first.
  *
- * Use cases: Invoice payments, retainer fees, project deposits
+ * Use cases: Invoice payments, retainer fees, project svc_deposits
  */
 
 export interface PaystackInitializeParams {
@@ -65,7 +65,7 @@ export async function verifyPayment(secretKey: string, reference: string): Promi
 }
 
 /**
- * Generate a unique Paystack payment reference for services transactions.
+ * Generate a unique Paystack payment reference for svc_services transactions.
  * Format: SRV-{tenantId}-{timestamp}-{random}
  */
 export function generatePaymentReference(tenantId: string): string {

@@ -2,17 +2,17 @@
  * External Booking API — WebWaka Services Suite
  *
  * WW-SVC-008: Provides secure, authenticated API endpoints for external
- * service booking platforms to integrate with webwaka-services.
+ * service booking platforms to integrate with webwaka-svc_services.
  *
  * Authentication: API Key (not JWT). Partners supply their key as:
  *   Authorization: ApiKey <raw_api_key>
- * The raw key is SHA-256 hashed and compared against `api_keys.keyHashSha256`.
+ * The raw key is SHA-256 hashed and compared against `svc_api_keys.keyHashSha256`.
  *
  * Routes (all under /external/):
- *   GET  /external/services                — list available services for a tenant
+ *   GET  /external/svc_services                — list available svc_services for a tenant
  *   GET  /external/availability            — get available slots for a service + date
- *   POST /external/appointments            — book an appointment (returns booking ID)
- *   GET  /external/appointments/:id        — retrieve booking status
+ *   POST /external/svc_appointments            — book an appointment (returns booking ID)
+ *   GET  /external/svc_appointments/:id        — retrieve booking status
  *
  * Tenant resolution: API keys are scoped to a tenant, so no tenantId is
  * required in the request body — it is resolved from the API key record.
@@ -74,7 +74,7 @@ externalRouter.use('*', async (c, next) => {
 
   const keyRecord = await c.env.DB.prepare(
     `SELECT id, tenantId, label, scopes, isActive, expiresAt
-     FROM api_keys
+     FROM svc_api_keys
      WHERE keyHashSha256 = ? AND isActive = 1`,
   )
     .bind(keyHash)
@@ -90,7 +90,7 @@ externalRouter.use('*', async (c, next) => {
   }
 
   // Update last used timestamp (fire-and-forget)
-  c.env.DB.prepare('UPDATE api_keys SET lastUsedAt = ? WHERE id = ?')
+  c.env.DB.prepare('UPDATE svc_api_keys SET lastUsedAt = ? WHERE id = ?')
     .bind(new Date().toISOString(), keyRecord.id)
     .run()
     .catch(() => null);
@@ -104,12 +104,12 @@ externalRouter.use('*', async (c, next) => {
 
 // ─── List Available Services ───────────────────────────────────────────────────
 
-externalRouter.get('/services', async (c) => {
+externalRouter.get('/svc_services', async (c) => {
   const tenantId = c.get('tenantId');
 
   const { results } = await c.env.DB.prepare(
     `SELECT id, name, description, durationMinutes, basePriceKobo
-     FROM services
+     FROM svc_services
      WHERE tenantId = ? AND isActive = 1
      ORDER BY name ASC`,
   )
@@ -117,7 +117,7 @@ externalRouter.get('/services', async (c) => {
     .all();
 
   // Format prices for display (kobo → naira with ₦ symbol)
-  const services = results.map((s) => {
+  const svc_services = results.map((s) => {
     const service = s as { id: string; name: string; description: string | null; durationMinutes: number; basePriceKobo: number };
     return {
       id: service.id,
@@ -129,7 +129,7 @@ externalRouter.get('/services', async (c) => {
     };
   });
 
-  return c.json({ data: services });
+  return c.json({ data: svc_services });
 });
 
 // ─── Get Available Slots ──────────────────────────────────────────────────────
@@ -152,17 +152,17 @@ externalRouter.get('/availability', async (c) => {
 
   // Resolve service duration from catalog
   const service = await c.env.DB.prepare(
-    'SELECT id, name, durationMinutes, basePriceKobo FROM services WHERE id = ? AND tenantId = ? AND isActive = 1',
+    'SELECT id, name, durationMinutes, basePriceKobo FROM svc_services WHERE id = ? AND tenantId = ? AND isActive = 1',
   )
     .bind(serviceId, tenantId)
     .first<{ id: string; name: string; durationMinutes: number; basePriceKobo: number }>();
 
   if (!service) return c.json({ error: 'Service not found or inactive' }, 404);
 
-  // If staffId is specified, get slots for that staff only; otherwise get all available staff
+  // If staffId is specified, get slots for that svc_staff only; otherwise get all available svc_staff
   if (staffId) {
     const staffExists = await c.env.DB.prepare(
-      "SELECT id, name FROM staff WHERE id = ? AND tenantId = ? AND status = 'active'",
+      "SELECT id, name FROM svc_staff WHERE id = ? AND tenantId = ? AND status = 'active'",
     )
       .bind(staffId, tenantId)
       .first<{ id: string; name: string }>();
@@ -182,38 +182,38 @@ externalRouter.get('/availability', async (c) => {
     return c.json({
       data: {
         service: { id: service.id, name: service.name, durationMinutes: service.durationMinutes },
-        staff: staffExists,
+        svc_staff: staffExists,
         date,
         slots,
       },
     });
   }
 
-  // No staffId — fetch all available staff slots
+  // No staffId — fetch all available svc_staff slots
   const { results: allStaff } = await c.env.DB.prepare(
-    "SELECT id, name FROM staff WHERE tenantId = ? AND status = 'active' ORDER BY name ASC",
+    "SELECT id, name FROM svc_staff WHERE tenantId = ? AND status = 'active' ORDER BY name ASC",
   )
     .bind(tenantId)
     .all<{ id: string; name: string }>();
 
   const availabilityByStaff: Array<{ staffId: string; staffName: string; slots: unknown[] }> = [];
 
-  for (const staff of allStaff) {
+  for (const svc_staff of allStaff) {
     try {
       const slots = await calculateAvailableSlots({
         db: c.env.DB,
         tenantId,
-        staffId: staff.id,
+        staffId: svc_staff.id,
         date,
         serviceDurationMinutes: service.durationMinutes,
         bufferMinutes: 15,
         isMobile: false,
       });
       if (slots.length > 0) {
-        availabilityByStaff.push({ staffId: staff.id, staffName: staff.name, slots });
+        availabilityByStaff.push({ staffId: svc_staff.id, staffName: svc_staff.name, slots });
       }
     } catch {
-      // Skip staff with no availability configured
+      // Skip svc_staff with no availability configured
     }
   }
 
@@ -228,7 +228,7 @@ externalRouter.get('/availability', async (c) => {
 
 // ─── Book an Appointment ──────────────────────────────────────────────────────
 
-externalRouter.post('/appointments', async (c) => {
+externalRouter.post('/svc_appointments', async (c) => {
   const tenantId = c.get('tenantId');
   const scopes = c.get('keyScopes') ?? '';
 
@@ -261,17 +261,17 @@ externalRouter.post('/appointments', async (c) => {
 
   // Resolve service
   const service = await c.env.DB.prepare(
-    'SELECT id, name, durationMinutes FROM services WHERE id = ? AND tenantId = ? AND isActive = 1',
+    'SELECT id, name, durationMinutes FROM svc_services WHERE id = ? AND tenantId = ? AND isActive = 1',
   )
     .bind(body.serviceId, tenantId)
     .first<{ id: string; name: string; durationMinutes: number }>();
 
   if (!service) return c.json({ error: 'Service not found or inactive' }, 404);
 
-  // Validate staff if provided
+  // Validate svc_staff if provided
   if (body.staffId) {
     const staffExists = await c.env.DB.prepare(
-      "SELECT id FROM staff WHERE id = ? AND tenantId = ? AND status = 'active'",
+      "SELECT id FROM svc_staff WHERE id = ? AND tenantId = ? AND status = 'active'",
     )
       .bind(body.staffId, tenantId)
       .first();
@@ -279,7 +279,7 @@ externalRouter.post('/appointments', async (c) => {
     if (!staffExists) return c.json({ error: 'Staff member not found or inactive' }, 404);
 
     // Double-booking check
-    const { checkDoubleBooking } = await import('../appointments/index');
+    const { checkDoubleBooking } = await import('../svc_appointments/index');
     const conflict = await checkDoubleBooking(
       c.env.DB,
       tenantId,
@@ -300,7 +300,7 @@ externalRouter.post('/appointments', async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO appointments
+    `INSERT INTO svc_appointments
        (id, tenantId, clientPhone, clientName, service, scheduledAt,
         durationMinutes, status, notes, staffId, isMobile, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, 0, ?, ?)`,
@@ -328,7 +328,7 @@ externalRouter.post('/appointments', async (c) => {
     if (reminderMs > nowMs) {
       const reminderId = crypto.randomUUID();
       await c.env.DB.prepare(
-        `INSERT INTO reminder_logs
+        `INSERT INTO svc_reminder_logs
            (id, tenantId, appointmentId, channel, recipient, scheduledFor,
             status, sentAt, errorMessage, createdAt, updatedAt)
          VALUES (?, ?, ?, 'whatsapp', ?, ?, 'scheduled', NULL, NULL, ?, ?)`,
@@ -352,13 +352,13 @@ externalRouter.post('/appointments', async (c) => {
 
 // ─── Get Booking Status ────────────────────────────────────────────────────────
 
-externalRouter.get('/appointments/:id', async (c) => {
+externalRouter.get('/svc_appointments/:id', async (c) => {
   const tenantId = c.get('tenantId');
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
     `SELECT id, service, scheduledAt, durationMinutes, status, clientPhone, clientName, notes
-     FROM appointments WHERE id = ? AND tenantId = ?`,
+     FROM svc_appointments WHERE id = ? AND tenantId = ?`,
   )
     .bind(id, tenantId)
     .first();

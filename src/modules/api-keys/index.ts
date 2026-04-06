@@ -49,7 +49,7 @@ apiKeysRouter.get('/', requireRole(['admin']), async (c) => {
 
   const { results } = await c.env.DB.prepare(
     `SELECT id, label, scopes, isActive, lastUsedAt, expiresAt, createdAt, updatedAt
-     FROM api_keys
+     FROM svc_api_keys
      WHERE tenantId = ?
      ORDER BY createdAt DESC`,
   )
@@ -96,7 +96,7 @@ apiKeysRouter.post('/', requireRole(['admin']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO api_keys
+    `INSERT INTO svc_api_keys
        (id, tenantId, label, keyHashSha256, scopes, isActive, lastUsedAt, expiresAt, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, 1, NULL, ?, ?, ?)`,
   )
@@ -122,7 +122,7 @@ apiKeysRouter.patch('/:id', requireRole(['admin']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM api_keys WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_api_keys WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -152,7 +152,7 @@ apiKeysRouter.patch('/:id', requireRole(['admin']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE api_keys SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_api_keys SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -167,14 +167,14 @@ apiKeysRouter.delete('/:id', requireRole(['admin']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM api_keys WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_api_keys WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
   if (!existing) return c.json({ error: 'API key not found' }, 404);
 
   await c.env.DB.prepare(
-    'UPDATE api_keys SET isActive = 0, updatedAt = ? WHERE id = ? AND tenantId = ?',
+    'UPDATE svc_api_keys SET isActive = 0, updatedAt = ? WHERE id = ? AND tenantId = ?',
   )
     .bind(new Date().toISOString(), id, tenantId)
     .run();

@@ -1,7 +1,7 @@
 -- WebWaka Services Suite — D1 Database Schema
 -- Invariant 5: Nigeria First — All amounts in kobo integers
 
-CREATE TABLE IF NOT EXISTS clients (
+CREATE TABLE IF NOT EXISTS svc_clients (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -13,9 +13,9 @@ CREATE TABLE IF NOT EXISTS clients (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_clients_tenantId ON clients(tenantId);
+CREATE INDEX IF NOT EXISTS idx_clients_tenantId ON svc_clients(tenantId);
 
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS svc_projects (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   clientId TEXT NOT NULL,
@@ -27,10 +27,10 @@ CREATE TABLE IF NOT EXISTS projects (
   endDate TEXT NOT NULL,
   createdAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_projects_tenantId ON projects(tenantId);
-CREATE INDEX IF NOT EXISTS idx_projects_clientId ON projects(clientId);
+CREATE INDEX IF NOT EXISTS idx_projects_tenantId ON svc_projects(tenantId);
+CREATE INDEX IF NOT EXISTS idx_projects_clientId ON svc_projects(clientId);
 
-CREATE TABLE IF NOT EXISTS invoices (
+CREATE TABLE IF NOT EXISTS svc_invoices (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   projectId TEXT NOT NULL,
@@ -43,5 +43,5 @@ CREATE TABLE IF NOT EXISTS invoices (
   dueDate TEXT NOT NULL,
   createdAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_invoices_tenantId ON invoices(tenantId);
-CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON invoices(clientId);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenantId ON svc_invoices(tenantId);
+CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON svc_invoices(clientId);

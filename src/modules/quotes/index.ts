@@ -1,18 +1,18 @@
 /**
  * Automated Quoting System — WebWaka Services Suite
  *
- * Generates instant service quotes based on user-supplied parameters, stores
- * them in D1, and optionally sends them to clients via WhatsApp/email.
+ * Generates instant service svc_quotes based on user-supplied parameters, stores
+ * them in D1, and optionally sends them to svc_clients via WhatsApp/email.
  *
  * All monetary values are stored and returned in kobo — Invariant 5: Nigeria First.
  *
  * Routes:
- *   POST /api/quotes/estimate        — compute quote without persisting (instant estimate)
- *   GET  /api/quotes                 — list all quotes for the tenant
- *   GET  /api/quotes/:id             — get a single quote with its line items
- *   POST /api/quotes                 — create and persist a formal quote
- *   PATCH /api/quotes/:id            — update quote status or notes
- *   POST /api/quotes/:id/send        — send the quote to the client via WhatsApp
+ *   POST /api/svc_quotes/estimate        — compute quote without persisting (instant estimate)
+ *   GET  /api/svc_quotes                 — list all svc_quotes for the tenant
+ *   GET  /api/svc_quotes/:id             — get a single quote with its line items
+ *   POST /api/svc_quotes                 — create and persist a formal quote
+ *   PATCH /api/svc_quotes/:id            — update quote status or notes
+ *   POST /api/svc_quotes/:id/send        — send the quote to the client via WhatsApp
  *
  * Pricing rules:
  *   Quotes are built from line items. Each line item has a description, quantity,
@@ -128,7 +128,7 @@ quotesRouter.get('/', requireRole(['admin', 'manager', 'consultant']), async (c)
   const status = c.req.query('status');
   const clientId = c.req.query('clientId');
 
-  let query = 'SELECT * FROM quotes WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_quotes WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (status) { query += ' AND status = ?'; bindings.push(status); }
@@ -147,14 +147,14 @@ quotesRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), async 
   const id = c.req.param('id');
 
   const quote = await c.env.DB.prepare(
-    'SELECT * FROM quotes WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_quotes WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
   if (!quote) return c.json({ error: 'Quote not found' }, 404);
 
   const { results: lineItems } = await c.env.DB.prepare(
-    'SELECT * FROM quote_line_items WHERE quoteId = ? ORDER BY rowid ASC',
+    'SELECT * FROM svc_quote_line_items WHERE quoteId = ? ORDER BY rowid ASC',
   )
     .bind(id)
     .all();
@@ -197,7 +197,7 @@ quotesRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO quotes
+    `INSERT INTO svc_quotes
        (id, tenantId, clientId, clientPhone, clientEmail, service,
         subtotalKobo, taxKobo, totalKobo, depositKobo,
         status, validUntil, notes, createdAt, updatedAt)
@@ -224,7 +224,7 @@ quotesRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   for (const item of computedItems) {
     const itemId = crypto.randomUUID();
     await c.env.DB.prepare(
-      'INSERT INTO quote_line_items (id, quoteId, description, quantity, unitPriceKobo, totalKobo) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO svc_quote_line_items (id, quoteId, description, quantity, unitPriceKobo, totalKobo) VALUES (?, ?, ?, ?, ?, ?)',
     )
       .bind(itemId, quoteId, item.description, item.quantity, item.unitPriceKobo, item.totalKobo)
       .run();
@@ -256,7 +256,7 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, status FROM quotes WHERE id = ? AND tenantId = ?',
+    'SELECT id, status FROM svc_quotes WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{ id: string; status: string }>();
@@ -279,7 +279,7 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE quotes SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_quotes SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -287,7 +287,7 @@ quotesRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   // Emit ledger event when quote is accepted or rejected (WW-SVC-003)
   if (body.status === 'accepted' || body.status === 'rejected') {
     const freshQuote = await c.env.DB.prepare(
-      'SELECT id, totalKobo, clientId, service FROM quotes WHERE id = ? AND tenantId = ?',
+      'SELECT id, totalKobo, clientId, service FROM svc_quotes WHERE id = ? AND tenantId = ?',
     )
       .bind(id, tenantId)
       .first<{ id: string; totalKobo: number; clientId: string | null; service: string }>();
@@ -320,7 +320,7 @@ quotesRouter.post('/:id/send', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const quote = await c.env.DB.prepare(
-    'SELECT * FROM quotes WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_quotes WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{
@@ -357,7 +357,7 @@ quotesRouter.post('/:id/send', requireRole(['admin', 'manager']), async (c) => {
 
   if (sent) {
     await c.env.DB.prepare(
-      "UPDATE quotes SET status = 'sent', updatedAt = ? WHERE id = ? AND tenantId = ?",
+      "UPDATE svc_quotes SET status = 'sent', updatedAt = ? WHERE id = ? AND tenantId = ?",
     )
       .bind(new Date().toISOString(), id, tenantId)
       .run();

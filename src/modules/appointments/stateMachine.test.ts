@@ -129,7 +129,7 @@ describe('State Machine — Error Recovery', () => {
     expect(r.nextState).toBe('CANCELLED');
   });
 
-  it('all 5 services recognised by number', () => {
+  it('all 5 svc_services recognised by number', () => {
     KNOWN_SERVICES.forEach((service, i) => {
       const s = makeSession({ state: 'COLLECT_SERVICE' });
       const r = transition(s, String(i + 1));

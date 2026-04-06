@@ -59,7 +59,7 @@ const TEST_USER: AuthUser = {
   email: 'test@webwaka.build',
   role: 'TENANT_ADMIN',
   tenantId: 'tenant-inst-123',
-  permissions: ['appointments:read', 'appointments:write', 'invoices:read', 'invoices:write'],
+  permissions: ['svc_appointments:read', 'svc_appointments:write', 'svc_invoices:read', 'svc_invoices:write'],
 };
 
 // ─── Auth functions ────────────────────────────────────────────────────────────

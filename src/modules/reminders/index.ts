@@ -1,10 +1,10 @@
 /**
  * Automated Reminders Module — WebWaka Services Suite
  *
- * Schedules and dispatches appointment reminders to clients via SMS or WhatsApp,
+ * Schedules and dispatches appointment reminders to svc_clients via SMS or WhatsApp,
  * reducing no-shows through timely notifications.
  *
- * Reminders are stored in the `reminder_logs` table and dispatched either:
+ * Reminders are stored in the `svc_reminder_logs` table and dispatched either:
  *   - Manually via POST /api/reminders/dispatch (for cron jobs or ad-hoc sends)
  *   - Automatically when an appointment is created (if auto-schedule is requested)
  *
@@ -65,7 +65,7 @@ remindersRouter.get('/', requireRole(['admin', 'manager']), async (c) => {
   const status = c.req.query('status');
   const appointmentId = c.req.query('appointmentId');
 
-  let query = 'SELECT * FROM reminder_logs WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_reminder_logs WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (status) { query += ' AND status = ?'; bindings.push(status); }
@@ -84,7 +84,7 @@ remindersRouter.get('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM reminder_logs WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_reminder_logs WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -116,7 +116,7 @@ remindersRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
 
   // Validate appointment exists and belongs to tenant
   const appt = await c.env.DB.prepare(
-    'SELECT id, status FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT id, status FROM svc_appointments WHERE id = ? AND tenantId = ?',
   )
     .bind(body.appointmentId, tenantId)
     .first<{ id: string; status: string }>();
@@ -137,7 +137,7 @@ remindersRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO reminder_logs
+    `INSERT INTO svc_reminder_logs
        (id, tenantId, appointmentId, channel, recipient, scheduledFor,
         status, sentAt, errorMessage, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, 'scheduled', NULL, NULL, ?, ?)`,
@@ -167,8 +167,8 @@ remindersRouter.post('/dispatch', requireRole(['admin']), async (c) => {
   // Fetch all scheduled reminders that are due (scheduledFor <= now)
   const { results: due } = await c.env.DB.prepare(
     `SELECT r.*, a.service, a.clientName, a.scheduledAt
-     FROM reminder_logs r
-     JOIN appointments a ON a.id = r.appointmentId
+     FROM svc_reminder_logs r
+     JOIN svc_appointments a ON a.id = r.appointmentId
      WHERE r.tenantId = ? AND r.status = 'scheduled' AND r.scheduledFor <= ?
      ORDER BY r.scheduledFor ASC
      LIMIT 50`,
@@ -203,7 +203,7 @@ remindersRouter.post('/dispatch', requireRole(['admin']), async (c) => {
       // It is intentionally left as a stub to avoid silent failures on email sends.
 
       await c.env.DB.prepare(
-        "UPDATE reminder_logs SET status = 'sent', sentAt = ?, updatedAt = ? WHERE id = ?",
+        "UPDATE svc_reminder_logs SET status = 'sent', sentAt = ?, updatedAt = ? WHERE id = ?",
       )
         .bind(dispatchedAt, dispatchedAt, reminder.id)
         .run();
@@ -212,7 +212,7 @@ remindersRouter.post('/dispatch', requireRole(['admin']), async (c) => {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       await c.env.DB.prepare(
-        "UPDATE reminder_logs SET status = 'failed', errorMessage = ?, updatedAt = ? WHERE id = ?",
+        "UPDATE svc_reminder_logs SET status = 'failed', errorMessage = ?, updatedAt = ? WHERE id = ?",
       )
         .bind(errorMessage, dispatchedAt, reminder.id)
         .run();
@@ -230,7 +230,7 @@ remindersRouter.post('/:id/cancel', requireRole(['admin', 'manager']), async (c)
   const id = c.req.param('id');
 
   const reminder = await c.env.DB.prepare(
-    'SELECT id, status FROM reminder_logs WHERE id = ? AND tenantId = ?',
+    'SELECT id, status FROM svc_reminder_logs WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{ id: string; status: string }>();
@@ -241,7 +241,7 @@ remindersRouter.post('/:id/cancel', requireRole(['admin', 'manager']), async (c)
   }
 
   await c.env.DB.prepare(
-    "UPDATE reminder_logs SET status = 'cancelled', updatedAt = ? WHERE id = ?",
+    "UPDATE svc_reminder_logs SET status = 'cancelled', updatedAt = ? WHERE id = ?",
   )
     .bind(new Date().toISOString(), id)
     .run();

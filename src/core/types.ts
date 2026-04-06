@@ -130,7 +130,7 @@ export interface Project {
 }
 
 /**
- * A task within a project. Assigned to a specific staff member.
+ * A task within a project. Assigned to a specific svc_staff member.
  */
 export interface ProjectTask {
   id: string;
@@ -200,7 +200,7 @@ export interface Staff {
 }
 
 /**
- * Weekly recurring availability window for a staff member.
+ * Weekly recurring availability window for a svc_staff member.
  * dayOfWeek: 0 (Sunday) – 6 (Saturday), matching JS Date.getDay().
  * startTime / endTime: "HH:MM" in WAT (UTC+1).
  */

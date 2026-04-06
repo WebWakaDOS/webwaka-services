@@ -4,7 +4,7 @@
 -- Invariant 5: Nigeria First — All monetary amounts in kobo integers
 
 -- ─── Clients ──────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS clients (
+CREATE TABLE IF NOT EXISTS svc_clients (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -16,11 +16,11 @@ CREATE TABLE IF NOT EXISTS clients (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_clients_tenantId ON clients(tenantId);
-CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
+CREATE INDEX IF NOT EXISTS idx_clients_tenantId ON svc_clients(tenantId);
+CREATE INDEX IF NOT EXISTS idx_clients_status ON svc_clients(status);
 
 -- ─── Projects ─────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS projects (
+CREATE TABLE IF NOT EXISTS svc_projects (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   clientId TEXT NOT NULL,
@@ -34,12 +34,12 @@ CREATE TABLE IF NOT EXISTS projects (
   createdAt TEXT NOT NULL,
   updatedAt TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_projects_tenantId ON projects(tenantId);
-CREATE INDEX IF NOT EXISTS idx_projects_clientId ON projects(clientId);
-CREATE INDEX IF NOT EXISTS idx_projects_status ON projects(status);
+CREATE INDEX IF NOT EXISTS idx_projects_tenantId ON svc_projects(tenantId);
+CREATE INDEX IF NOT EXISTS idx_projects_clientId ON svc_projects(clientId);
+CREATE INDEX IF NOT EXISTS idx_projects_status ON svc_projects(status);
 
 -- ─── Project Tasks ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_tasks (
+CREATE TABLE IF NOT EXISTS svc_project_tasks (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   projectId TEXT NOT NULL,
@@ -51,14 +51,14 @@ CREATE TABLE IF NOT EXISTS project_tasks (
   completedAt TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
-  FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+  FOREIGN KEY (projectId) REFERENCES svc_projects(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_project_tasks_tenantId ON project_tasks(tenantId);
-CREATE INDEX IF NOT EXISTS idx_project_tasks_projectId ON project_tasks(projectId);
-CREATE INDEX IF NOT EXISTS idx_project_tasks_status ON project_tasks(status);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_tenantId ON svc_project_tasks(tenantId);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_projectId ON svc_project_tasks(projectId);
+CREATE INDEX IF NOT EXISTS idx_project_tasks_status ON svc_project_tasks(status);
 
 -- ─── Project Milestones ───────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS project_milestones (
+CREATE TABLE IF NOT EXISTS svc_project_milestones (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   projectId TEXT NOT NULL,
@@ -70,14 +70,14 @@ CREATE TABLE IF NOT EXISTS project_milestones (
   achievedAt TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
-  FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
+  FOREIGN KEY (projectId) REFERENCES svc_projects(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_milestones_tenantId ON project_milestones(tenantId);
-CREATE INDEX IF NOT EXISTS idx_milestones_projectId ON project_milestones(projectId);
+CREATE INDEX IF NOT EXISTS idx_milestones_tenantId ON svc_project_milestones(tenantId);
+CREATE INDEX IF NOT EXISTS idx_milestones_projectId ON svc_project_milestones(projectId);
 
 -- ─── Invoices ─────────────────────────────────────────────────────────────────
--- projectId is nullable — invoices can exist independently of projects.
-CREATE TABLE IF NOT EXISTS invoices (
+-- projectId is nullable — svc_invoices can exist independently of svc_projects.
+CREATE TABLE IF NOT EXISTS svc_invoices (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   projectId TEXT,                    -- nullable: optional project association
@@ -93,24 +93,24 @@ CREATE TABLE IF NOT EXISTS invoices (
   createdAt TEXT NOT NULL,
   updatedAt TEXT
 );
-CREATE INDEX IF NOT EXISTS idx_invoices_tenantId ON invoices(tenantId);
-CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON invoices(clientId);
-CREATE INDEX IF NOT EXISTS idx_invoices_projectId ON invoices(projectId);
-CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
+CREATE INDEX IF NOT EXISTS idx_invoices_tenantId ON svc_invoices(tenantId);
+CREATE INDEX IF NOT EXISTS idx_invoices_clientId ON svc_invoices(clientId);
+CREATE INDEX IF NOT EXISTS idx_invoices_projectId ON svc_invoices(projectId);
+CREATE INDEX IF NOT EXISTS idx_invoices_status ON svc_invoices(status);
 
 -- ─── Appointments ─────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS appointments (
+CREATE TABLE IF NOT EXISTS svc_appointments (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   clientPhone TEXT NOT NULL,         -- E.164 WhatsApp phone number (e.g. 2348012345678)
   clientName TEXT,                   -- collected during conversation
-  clientId TEXT,                     -- optional: link to clients table (migration 0004)
+  clientId TEXT,                     -- optional: link to svc_clients table (migration 0004)
   service TEXT NOT NULL,             -- e.g. "Consultation", "Project Review"
   scheduledAt TEXT NOT NULL,         -- ISO 8601 UTC datetime string
   durationMinutes INTEGER NOT NULL DEFAULT 30,
   status TEXT NOT NULL DEFAULT 'pending', -- pending | confirmed | cancelled | completed
   notes TEXT,
-  staffId TEXT REFERENCES staff(id),
+  staffId TEXT REFERENCES svc_staff(id),
   isMobile INTEGER NOT NULL DEFAULT 0,   -- 0|1 SQLite boolean
   locationLat REAL,
   locationLng REAL,
@@ -119,15 +119,15 @@ CREATE TABLE IF NOT EXISTS appointments (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_appointments_tenantId ON appointments(tenantId);
-CREATE INDEX IF NOT EXISTS idx_appointments_phone ON appointments(clientPhone);
-CREATE INDEX IF NOT EXISTS idx_appointments_scheduledAt ON appointments(scheduledAt);
-CREATE INDEX IF NOT EXISTS idx_appointments_staffId ON appointments(staffId);
-CREATE INDEX IF NOT EXISTS idx_appointments_clientId ON appointments(clientId);
-CREATE INDEX IF NOT EXISTS idx_appointments_calendarEventId ON appointments(calendarEventId);
+CREATE INDEX IF NOT EXISTS idx_appointments_tenantId ON svc_appointments(tenantId);
+CREATE INDEX IF NOT EXISTS idx_appointments_phone ON svc_appointments(clientPhone);
+CREATE INDEX IF NOT EXISTS idx_appointments_scheduledAt ON svc_appointments(scheduledAt);
+CREATE INDEX IF NOT EXISTS idx_appointments_staffId ON svc_appointments(staffId);
+CREATE INDEX IF NOT EXISTS idx_appointments_clientId ON svc_appointments(clientId);
+CREATE INDEX IF NOT EXISTS idx_appointments_calendarEventId ON svc_appointments(calendarEventId);
 
 -- ─── WhatsApp Conversational Sessions ────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+CREATE TABLE IF NOT EXISTS svc_whatsapp_sessions (
   id TEXT PRIMARY KEY,               -- composite: tenantId + ':' + phone
   tenantId TEXT NOT NULL,
   phone TEXT NOT NULL,               -- E.164 WhatsApp sender phone
@@ -138,10 +138,10 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
   appointmentId TEXT,                -- set when booking is confirmed
   updatedAt TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_tenant_phone ON whatsapp_sessions(tenantId, phone);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_tenant_phone ON svc_whatsapp_sessions(tenantId, phone);
 
 -- ─── Staff ────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS staff (
+CREATE TABLE IF NOT EXISTS svc_staff (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -154,24 +154,24 @@ CREATE TABLE IF NOT EXISTS staff (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_staff_tenantId ON staff(tenantId);
-CREATE INDEX IF NOT EXISTS idx_staff_status ON staff(status);
+CREATE INDEX IF NOT EXISTS idx_staff_tenantId ON svc_staff(tenantId);
+CREATE INDEX IF NOT EXISTS idx_staff_status ON svc_staff(status);
 
 -- ─── Staff Availability ───────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS staff_availability (
+CREATE TABLE IF NOT EXISTS svc_staff_availability (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   staffId TEXT NOT NULL,
   dayOfWeek INTEGER NOT NULL, -- 0 (Sunday) – 6 (Saturday)
   startTime TEXT NOT NULL,    -- "HH:MM" WAT
   endTime TEXT NOT NULL,      -- "HH:MM" WAT
-  FOREIGN KEY (staffId) REFERENCES staff(id) ON DELETE CASCADE
+  FOREIGN KEY (staffId) REFERENCES svc_staff(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_staff_avail_staffId ON staff_availability(staffId);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_avail_unique ON staff_availability(staffId, dayOfWeek);
+CREATE INDEX IF NOT EXISTS idx_staff_avail_staffId ON svc_staff_availability(staffId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_staff_avail_unique ON svc_staff_availability(staffId, dayOfWeek);
 
 -- ─── Quotes ───────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS quotes (
+CREATE TABLE IF NOT EXISTS svc_quotes (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   clientId TEXT,
@@ -188,24 +188,24 @@ CREATE TABLE IF NOT EXISTS quotes (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_quotes_tenantId ON quotes(tenantId);
-CREATE INDEX IF NOT EXISTS idx_quotes_clientId ON quotes(clientId);
-CREATE INDEX IF NOT EXISTS idx_quotes_status ON quotes(status);
+CREATE INDEX IF NOT EXISTS idx_quotes_tenantId ON svc_quotes(tenantId);
+CREATE INDEX IF NOT EXISTS idx_quotes_clientId ON svc_quotes(clientId);
+CREATE INDEX IF NOT EXISTS idx_quotes_status ON svc_quotes(status);
 
 -- ─── Quote Line Items ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS quote_line_items (
+CREATE TABLE IF NOT EXISTS svc_quote_line_items (
   id TEXT PRIMARY KEY,
   quoteId TEXT NOT NULL,
   description TEXT NOT NULL,
   quantity REAL NOT NULL DEFAULT 1,
   unitPriceKobo INTEGER NOT NULL,     -- ALWAYS kobo
   totalKobo INTEGER NOT NULL,         -- quantity × unitPriceKobo
-  FOREIGN KEY (quoteId) REFERENCES quotes(id) ON DELETE CASCADE
+  FOREIGN KEY (quoteId) REFERENCES svc_quotes(id) ON DELETE CASCADE
 );
-CREATE INDEX IF NOT EXISTS idx_quote_items_quoteId ON quote_line_items(quoteId);
+CREATE INDEX IF NOT EXISTS idx_quote_items_quoteId ON svc_quote_line_items(quoteId);
 
 -- ─── Deposits ─────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS deposits (
+CREATE TABLE IF NOT EXISTS svc_deposits (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   appointmentId TEXT NOT NULL,
@@ -215,14 +215,14 @@ CREATE TABLE IF NOT EXISTS deposits (
   cancellationFeeKobo INTEGER NOT NULL DEFAULT 0,  -- ALWAYS kobo
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
-  FOREIGN KEY (appointmentId) REFERENCES appointments(id)
+  FOREIGN KEY (appointmentId) REFERENCES svc_appointments(id)
 );
-CREATE INDEX IF NOT EXISTS idx_deposits_tenantId ON deposits(tenantId);
-CREATE INDEX IF NOT EXISTS idx_deposits_appointmentId ON deposits(appointmentId);
-CREATE INDEX IF NOT EXISTS idx_deposits_paystackRef ON deposits(paystackReference);
+CREATE INDEX IF NOT EXISTS idx_deposits_tenantId ON svc_deposits(tenantId);
+CREATE INDEX IF NOT EXISTS idx_deposits_appointmentId ON svc_deposits(appointmentId);
+CREATE INDEX IF NOT EXISTS idx_deposits_paystackRef ON svc_deposits(paystackReference);
 
 -- ─── Reminder Logs ────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS reminder_logs (
+CREATE TABLE IF NOT EXISTS svc_reminder_logs (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   appointmentId TEXT NOT NULL,
@@ -234,15 +234,15 @@ CREATE TABLE IF NOT EXISTS reminder_logs (
   errorMessage TEXT,
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL,
-  FOREIGN KEY (appointmentId) REFERENCES appointments(id)
+  FOREIGN KEY (appointmentId) REFERENCES svc_appointments(id)
 );
-CREATE INDEX IF NOT EXISTS idx_reminders_tenantId ON reminder_logs(tenantId);
-CREATE INDEX IF NOT EXISTS idx_reminders_appointmentId ON reminder_logs(appointmentId);
-CREATE INDEX IF NOT EXISTS idx_reminders_scheduledFor ON reminder_logs(scheduledFor);
-CREATE INDEX IF NOT EXISTS idx_reminders_status ON reminder_logs(status);
+CREATE INDEX IF NOT EXISTS idx_reminders_tenantId ON svc_reminder_logs(tenantId);
+CREATE INDEX IF NOT EXISTS idx_reminders_appointmentId ON svc_reminder_logs(appointmentId);
+CREATE INDEX IF NOT EXISTS idx_reminders_scheduledFor ON svc_reminder_logs(scheduledFor);
+CREATE INDEX IF NOT EXISTS idx_reminders_status ON svc_reminder_logs(status);
 
 -- ─── Services Catalog ─────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS services (
+CREATE TABLE IF NOT EXISTS svc_services (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   name TEXT NOT NULL,
@@ -253,11 +253,11 @@ CREATE TABLE IF NOT EXISTS services (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_services_tenantId ON services(tenantId);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_services_tenant_name ON services(tenantId, name);
+CREATE INDEX IF NOT EXISTS idx_services_tenantId ON svc_services(tenantId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_services_tenant_name ON svc_services(tenantId, name);
 
 -- ─── API Keys (External Booking Authentication — WW-SVC-008) ──────────────────
-CREATE TABLE IF NOT EXISTS api_keys (
+CREATE TABLE IF NOT EXISTS svc_api_keys (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   label TEXT NOT NULL,              -- human-readable label
@@ -269,5 +269,5 @@ CREATE TABLE IF NOT EXISTS api_keys (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_api_keys_tenantId ON api_keys(tenantId);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(keyHashSha256);
+CREATE INDEX IF NOT EXISTS idx_api_keys_tenantId ON svc_api_keys(tenantId);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_hash ON svc_api_keys(keyHashSha256);

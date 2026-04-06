@@ -5,21 +5,21 @@
  * Tenant isolation is enforced via JWT.
  *
  * Routes:
- *   GET    /api/projects                         — list projects (filter by clientId/status)
- *   POST   /api/projects                         — create project
- *   GET    /api/projects/:id                     — get single project with tasks + milestones
- *   PATCH  /api/projects/:id                     — update project details / status
- *   DELETE /api/projects/:id                     — soft-cancel project
+ *   GET    /api/svc_projects                         — list svc_projects (filter by clientId/status)
+ *   POST   /api/svc_projects                         — create project
+ *   GET    /api/svc_projects/:id                     — get single project with tasks + milestones
+ *   PATCH  /api/svc_projects/:id                     — update project details / status
+ *   DELETE /api/svc_projects/:id                     — soft-cancel project
  *
- *   GET    /api/projects/:id/tasks               — list tasks for project
- *   POST   /api/projects/:id/tasks               — create task
- *   PATCH  /api/projects/:id/tasks/:taskId       — update task
- *   DELETE /api/projects/:id/tasks/:taskId       — delete task
+ *   GET    /api/svc_projects/:id/tasks               — list tasks for project
+ *   POST   /api/svc_projects/:id/tasks               — create task
+ *   PATCH  /api/svc_projects/:id/tasks/:taskId       — update task
+ *   DELETE /api/svc_projects/:id/tasks/:taskId       — delete task
  *
- *   GET    /api/projects/:id/milestones          — list milestones
- *   POST   /api/projects/:id/milestones          — create milestone
- *   PATCH  /api/projects/:id/milestones/:mid     — update milestone (mark achieved, etc.)
- *   DELETE /api/projects/:id/milestones/:mid     — delete milestone
+ *   GET    /api/svc_projects/:id/milestones          — list milestones
+ *   POST   /api/svc_projects/:id/milestones          — create milestone
+ *   PATCH  /api/svc_projects/:id/milestones/:mid     — update milestone (mark achieved, etc.)
+ *   DELETE /api/svc_projects/:id/milestones/:mid     — delete milestone
  */
 
 import { Hono } from 'hono';
@@ -40,7 +40,7 @@ projectsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), async (
   const clientId = c.req.query('clientId');
   const status = c.req.query('status');
 
-  let query = 'SELECT * FROM projects WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_projects WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (clientId) { query += ' AND clientId = ?'; bindings.push(clientId); }
@@ -60,7 +60,7 @@ projectsRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), asyn
   const id = c.req.param('id');
 
   const project = await c.env.DB.prepare(
-    'SELECT * FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -69,12 +69,12 @@ projectsRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), asyn
 
   const [tasksResult, milestonesResult] = await Promise.all([
     c.env.DB.prepare(
-      'SELECT * FROM project_tasks WHERE projectId = ? ORDER BY createdAt ASC',
+      'SELECT * FROM svc_project_tasks WHERE projectId = ? ORDER BY createdAt ASC',
     )
       .bind(id)
       .all(),
     c.env.DB.prepare(
-      'SELECT * FROM project_milestones WHERE projectId = ? ORDER BY dueDate ASC',
+      'SELECT * FROM svc_project_milestones WHERE projectId = ? ORDER BY dueDate ASC',
     )
       .bind(id)
       .all(),
@@ -120,7 +120,7 @@ projectsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
 
   // Verify client belongs to tenant
   const clientExists = await c.env.DB.prepare(
-    'SELECT id FROM clients WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_clients WHERE id = ? AND tenantId = ?',
   )
     .bind(body.clientId, tenantId)
     .first();
@@ -130,7 +130,7 @@ projectsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO projects
+    `INSERT INTO svc_projects
        (id, tenantId, clientId, name, description, status, budgetKobo, startDate, endDate, createdAt, updatedAt, tags)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
@@ -161,7 +161,7 @@ projectsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -201,7 +201,7 @@ projectsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) => {
   vals.push(new Date().toISOString(), id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE projects SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_projects SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -217,14 +217,14 @@ projectsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
   if (!existing) return c.json({ error: 'Project not found' }, 404);
 
   await c.env.DB.prepare(
-    "UPDATE projects SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_projects SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(new Date().toISOString(), id, tenantId)
     .run();
@@ -243,14 +243,14 @@ projectsRouter.get('/:id/tasks', requireRole(['admin', 'manager', 'consultant'])
   const projectId = c.req.param('id');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(projectId, tenantId)
     .first();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const status = c.req.query('status');
-  let query = 'SELECT * FROM project_tasks WHERE projectId = ? AND tenantId = ?';
+  let query = 'SELECT * FROM svc_project_tasks WHERE projectId = ? AND tenantId = ?';
   const bindings: unknown[] = [projectId, tenantId];
   if (status) { query += ' AND status = ?'; bindings.push(status); }
   query += ' ORDER BY createdAt ASC';
@@ -266,7 +266,7 @@ projectsRouter.post('/:id/tasks', requireRole(['admin', 'manager']), async (c) =
   const projectId = c.req.param('id');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(projectId, tenantId)
     .first();
@@ -284,7 +284,7 @@ projectsRouter.post('/:id/tasks', requireRole(['admin', 'manager']), async (c) =
 
   if (body.assignedStaffId) {
     const staffExists = await c.env.DB.prepare(
-      "SELECT id FROM staff WHERE id = ? AND tenantId = ? AND status = 'active'",
+      "SELECT id FROM svc_staff WHERE id = ? AND tenantId = ? AND status = 'active'",
     )
       .bind(body.assignedStaffId, tenantId)
       .first();
@@ -295,7 +295,7 @@ projectsRouter.post('/:id/tasks', requireRole(['admin', 'manager']), async (c) =
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO project_tasks
+    `INSERT INTO svc_project_tasks
        (id, tenantId, projectId, title, description, assignedStaffId, status, dueDate, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
@@ -324,7 +324,7 @@ projectsRouter.patch('/:id/tasks/:taskId', requireRole(['admin', 'manager']), as
   const taskId = c.req.param('taskId');
 
   const task = await c.env.DB.prepare(
-    'SELECT id FROM project_tasks WHERE id = ? AND projectId = ? AND tenantId = ?',
+    'SELECT id FROM svc_project_tasks WHERE id = ? AND projectId = ? AND tenantId = ?',
   )
     .bind(taskId, projectId, tenantId)
     .first();
@@ -364,7 +364,7 @@ projectsRouter.patch('/:id/tasks/:taskId', requireRole(['admin', 'manager']), as
   vals.push(new Date().toISOString(), taskId, projectId, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE project_tasks SET ${fields.join(', ')} WHERE id = ? AND projectId = ? AND tenantId = ?`,
+    `UPDATE svc_project_tasks SET ${fields.join(', ')} WHERE id = ? AND projectId = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -380,13 +380,13 @@ projectsRouter.delete('/:id/tasks/:taskId', requireRole(['admin', 'manager']), a
   const taskId = c.req.param('taskId');
 
   const task = await c.env.DB.prepare(
-    'SELECT id FROM project_tasks WHERE id = ? AND projectId = ? AND tenantId = ?',
+    'SELECT id FROM svc_project_tasks WHERE id = ? AND projectId = ? AND tenantId = ?',
   )
     .bind(taskId, projectId, tenantId)
     .first();
   if (!task) return c.json({ error: 'Task not found' }, 404);
 
-  await c.env.DB.prepare('DELETE FROM project_tasks WHERE id = ?').bind(taskId).run();
+  await c.env.DB.prepare('DELETE FROM svc_project_tasks WHERE id = ?').bind(taskId).run();
   return c.json({ success: true });
 });
 
@@ -401,14 +401,14 @@ projectsRouter.get('/:id/milestones', requireRole(['admin', 'manager', 'consulta
   const projectId = c.req.param('id');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(projectId, tenantId)
     .first();
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const { results } = await c.env.DB.prepare(
-    'SELECT * FROM project_milestones WHERE projectId = ? AND tenantId = ? ORDER BY dueDate ASC',
+    'SELECT * FROM svc_project_milestones WHERE projectId = ? AND tenantId = ? ORDER BY dueDate ASC',
   )
     .bind(projectId, tenantId)
     .all();
@@ -423,7 +423,7 @@ projectsRouter.post('/:id/milestones', requireRole(['admin', 'manager']), async 
   const projectId = c.req.param('id');
 
   const project = await c.env.DB.prepare(
-    'SELECT id FROM projects WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_projects WHERE id = ? AND tenantId = ?',
   )
     .bind(projectId, tenantId)
     .first();
@@ -447,7 +447,7 @@ projectsRouter.post('/:id/milestones', requireRole(['admin', 'manager']), async 
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO project_milestones
+    `INSERT INTO svc_project_milestones
        (id, tenantId, projectId, name, description, dueDate, status, amountKobo, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
   )
@@ -475,7 +475,7 @@ projectsRouter.patch('/:id/milestones/:mid', requireRole(['admin', 'manager']), 
   const mid = c.req.param('mid');
 
   const milestone = await c.env.DB.prepare(
-    'SELECT id FROM project_milestones WHERE id = ? AND projectId = ? AND tenantId = ?',
+    'SELECT id FROM svc_project_milestones WHERE id = ? AND projectId = ? AND tenantId = ?',
   )
     .bind(mid, projectId, tenantId)
     .first();
@@ -515,7 +515,7 @@ projectsRouter.patch('/:id/milestones/:mid', requireRole(['admin', 'manager']), 
   vals.push(new Date().toISOString(), mid, projectId, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE project_milestones SET ${fields.join(', ')} WHERE id = ? AND projectId = ? AND tenantId = ?`,
+    `UPDATE svc_project_milestones SET ${fields.join(', ')} WHERE id = ? AND projectId = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -531,12 +531,12 @@ projectsRouter.delete('/:id/milestones/:mid', requireRole(['admin', 'manager']),
   const mid = c.req.param('mid');
 
   const milestone = await c.env.DB.prepare(
-    'SELECT id FROM project_milestones WHERE id = ? AND projectId = ? AND tenantId = ?',
+    'SELECT id FROM svc_project_milestones WHERE id = ? AND projectId = ? AND tenantId = ?',
   )
     .bind(mid, projectId, tenantId)
     .first();
   if (!milestone) return c.json({ error: 'Milestone not found' }, 404);
 
-  await c.env.DB.prepare('DELETE FROM project_milestones WHERE id = ?').bind(mid).run();
+  await c.env.DB.prepare('DELETE FROM svc_project_milestones WHERE id = ?').bind(mid).run();
   return c.json({ success: true });
 });

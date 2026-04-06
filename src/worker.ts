@@ -15,18 +15,18 @@
 import { Hono } from 'hono';
 import { jwtAuthMiddleware, secureCORS, rateLimit } from '@webwaka/core';
 import type { Bindings, AppVariables } from './core/types';
-import { projectsRouter } from './modules/projects/index';
-import { clientsRouter } from './modules/clients/index';
-import { invoicesRouter } from './modules/invoices/index';
-import { appointmentsRouter } from './modules/appointments/index';
+import { projectsRouter } from './modules/svc_projects/index';
+import { clientsRouter } from './modules/svc_clients/index';
+import { invoicesRouter } from './modules/svc_invoices/index';
+import { appointmentsRouter } from './modules/svc_appointments/index';
 import { whatsappRouter } from './modules/whatsapp/index';
-import { staffRouter } from './modules/staff/index';
+import { staffRouter } from './modules/svc_staff/index';
 import { schedulingRouter } from './modules/scheduling/index';
-import { quotesRouter } from './modules/quotes/index';
-import { depositsRouter } from './modules/deposits/index';
+import { quotesRouter } from './modules/svc_quotes/index';
+import { depositsRouter } from './modules/svc_deposits/index';
 import { remindersRouter } from './modules/reminders/index';
 import { chatbotRouter } from './modules/support/chatbot';
-import { servicesRouter } from './modules/services/index';
+import { servicesRouter } from './modules/svc_services/index';
 import { apiKeysRouter } from './modules/api-keys/index';
 import { externalRouter } from './modules/external/index';
 
@@ -40,7 +40,7 @@ app.use('*', secureCORS());
 
 // Rate limiting on all auth and mutation endpoints
 // rateLimit() v1.3.0: options-based, reads RATE_LIMIT_KV from c.env internally
-app.use('/api/auth/*', rateLimit({ limit: 10, windowSeconds: 60, keyPrefix: 'services-auth' }));
+app.use('/api/auth/*', rateLimit({ limit: 10, windowSeconds: 60, keyPrefix: 'svc_services-auth' }));
 
 // JWT authentication on all /api/* routes
 // jwtAuthMiddleware() v1.3.0: reads JWT_SECRET from c.env internally
@@ -48,28 +48,28 @@ app.use('/api/auth/*', rateLimit({ limit: 10, windowSeconds: 60, keyPrefix: 'ser
 app.use('/api/*', jwtAuthMiddleware());
 
 // ─── Health Check (unauthenticated) ──────────────────────────────────────────
-app.get('/health', (c) => c.json({ status: 'ok', service: 'webwaka-services', version: '0.1.0' }));
+app.get('/health', (c) => c.json({ status: 'ok', service: 'webwaka-svc_services', version: '0.1.0' }));
 
 // ─── Core Module Routes ───────────────────────────────────────────────────────
-app.route('/api/projects', projectsRouter);
-app.route('/api/clients', clientsRouter);
-app.route('/api/invoices', invoicesRouter);
-app.route('/api/appointments', appointmentsRouter);
+app.route('/api/svc_projects', projectsRouter);
+app.route('/api/svc_clients', clientsRouter);
+app.route('/api/svc_invoices', invoicesRouter);
+app.route('/api/svc_appointments', appointmentsRouter);
 
 // ─── Phase 1: Scheduling & Staff ─────────────────────────────────────────────
-app.route('/api/staff', staffRouter);
+app.route('/api/svc_staff', staffRouter);
 app.route('/api/scheduling', schedulingRouter);
 
 // ─── Phase 2: Pricing & Quotes ────────────────────────────────────────────────
-app.route('/api/quotes', quotesRouter);
-app.route('/api/deposits', depositsRouter);
+app.route('/api/svc_quotes', quotesRouter);
+app.route('/api/svc_deposits', depositsRouter);
 
 // ─── Phase 3: Reminders ───────────────────────────────────────────────────────
 app.route('/api/reminders', remindersRouter);
 
 // ─── Phase 4: Services Catalog ────────────────────────────────────────────────
 // WW-SVC-008: Tenant-specific service definitions used by scheduling + external API
-app.route('/api/services', servicesRouter);
+app.route('/api/svc_services', servicesRouter);
 
 // ─── Phase 4: API Key Management (admin only) ─────────────────────────────────
 // WW-SVC-008: Admins create/revoke API keys for external booking integrations

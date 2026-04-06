@@ -6,11 +6,11 @@
  * Financial events emitted to webwaka-central-mgmt on status transitions.
  *
  * Routes:
- *   GET    /api/invoices              — list invoices (filter by status/clientId)
- *   POST   /api/invoices              — create invoice (status: draft)
- *   GET    /api/invoices/:id          — get single invoice
- *   PATCH  /api/invoices/:id          — update invoice (trigger ledger event on sent/paid)
- *   DELETE /api/invoices/:id          — cancel invoice
+ *   GET    /api/svc_invoices              — list svc_invoices (filter by status/clientId)
+ *   POST   /api/svc_invoices              — create invoice (status: draft)
+ *   GET    /api/svc_invoices/:id          — get single invoice
+ *   PATCH  /api/svc_invoices/:id          — update invoice (trigger ledger event on sent/paid)
+ *   DELETE /api/svc_invoices/:id          — cancel invoice
  */
 
 import { Hono } from 'hono';
@@ -31,7 +31,7 @@ invoicesRouter.get('/', requireRole(['admin', 'manager', 'accountant']), async (
   const clientId = c.req.query('clientId');
   const projectId = c.req.query('projectId');
 
-  let query = 'SELECT * FROM invoices WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_invoices WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (status) { query += ' AND status = ?'; bindings.push(status); }
@@ -52,7 +52,7 @@ invoicesRouter.get('/:id', requireRole(['admin', 'manager', 'accountant']), asyn
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM invoices WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_invoices WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first();
@@ -90,7 +90,7 @@ invoicesRouter.post('/', requireRole(['admin', 'manager', 'accountant']), async 
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO invoices
+    `INSERT INTO svc_invoices
        (id, tenantId, projectId, clientId, invoiceNumber, amountKobo, taxKobo, totalKobo,
         status, dueDate, notes, createdAt, updatedAt)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?)`,
@@ -140,7 +140,7 @@ invoicesRouter.patch('/:id', requireRole(['admin', 'manager', 'accountant']), as
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, status, totalKobo, invoiceNumber, clientId, projectId FROM invoices WHERE id = ? AND tenantId = ?',
+    'SELECT id, status, totalKobo, invoiceNumber, clientId, projectId FROM svc_invoices WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{ id: string; status: string; totalKobo: number; invoiceNumber: string; clientId: string; projectId: string | null }>();
@@ -181,7 +181,7 @@ invoicesRouter.patch('/:id', requireRole(['admin', 'manager', 'accountant']), as
   vals.push(now, id, tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE invoices SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_invoices SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   )
     .bind(...vals)
     .run();
@@ -224,7 +224,7 @@ invoicesRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id, status, totalKobo, invoiceNumber FROM invoices WHERE id = ? AND tenantId = ?',
+    'SELECT id, status, totalKobo, invoiceNumber FROM svc_invoices WHERE id = ? AND tenantId = ?',
   )
     .bind(id, tenantId)
     .first<{ id: string; status: string; totalKobo: number; invoiceNumber: string }>();
@@ -236,7 +236,7 @@ invoicesRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) => {
 
   const now = new Date().toISOString();
   await c.env.DB.prepare(
-    "UPDATE invoices SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_invoices SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
   )
     .bind(now, id, tenantId)
     .run();

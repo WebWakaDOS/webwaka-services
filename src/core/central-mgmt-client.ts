@@ -1,8 +1,8 @@
 /**
  * WebWaka Central Management Ledger Client
  *
- * Emits financial events from webwaka-services to the immutable financial ledger
- * managed by webwaka-central-mgmt. All transactions (invoices, quotes, deposits)
+ * Emits financial events from webwaka-svc_services to the immutable financial ledger
+ * managed by webwaka-central-mgmt. All transactions (svc_invoices, svc_quotes, svc_deposits)
  * MUST be recorded here per the platform governance rules.
  *
  * Invariant: webwaka-central-mgmt OWNS the immutable ledger. This vertical
@@ -74,7 +74,7 @@ export async function emitLedgerEvent(
   const body = JSON.stringify(event);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    'X-Service': 'webwaka-services',
+    'X-Service': 'webwaka-svc_services',
     'X-Inter-Service-Secret': env.INTER_SERVICE_SECRET,
   };
 

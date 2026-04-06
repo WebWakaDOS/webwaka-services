@@ -2,7 +2,7 @@
 -- Appointments + WhatsApp Conversational Sessions
 -- Invariant 5: Nigeria First — WAT (UTC+1) used for display; stored as ISO UTC strings
 
-CREATE TABLE IF NOT EXISTS appointments (
+CREATE TABLE IF NOT EXISTS svc_appointments (
   id TEXT PRIMARY KEY,
   tenantId TEXT NOT NULL,
   clientPhone TEXT NOT NULL,       -- E.164 WhatsApp phone number (e.g. 2348012345678)
@@ -15,12 +15,12 @@ CREATE TABLE IF NOT EXISTS appointments (
   createdAt TEXT NOT NULL,
   updatedAt TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_appointments_tenantId ON appointments(tenantId);
-CREATE INDEX IF NOT EXISTS idx_appointments_phone ON appointments(clientPhone);
-CREATE INDEX IF NOT EXISTS idx_appointments_scheduledAt ON appointments(scheduledAt);
+CREATE INDEX IF NOT EXISTS idx_appointments_tenantId ON svc_appointments(tenantId);
+CREATE INDEX IF NOT EXISTS idx_appointments_phone ON svc_appointments(clientPhone);
+CREATE INDEX IF NOT EXISTS idx_appointments_scheduledAt ON svc_appointments(scheduledAt);
 
 -- Conversational state machine sessions (keyed by phone number within a tenant)
-CREATE TABLE IF NOT EXISTS whatsapp_sessions (
+CREATE TABLE IF NOT EXISTS svc_whatsapp_sessions (
   id TEXT PRIMARY KEY,             -- composite: tenantId + ':' + phone
   tenantId TEXT NOT NULL,
   phone TEXT NOT NULL,             -- E.164 WhatsApp sender phone
@@ -31,4 +31,4 @@ CREATE TABLE IF NOT EXISTS whatsapp_sessions (
   appointmentId TEXT,              -- set when booking is confirmed
   updatedAt TEXT NOT NULL
 );
-CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_tenant_phone ON whatsapp_sessions(tenantId, phone);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_sessions_tenant_phone ON svc_whatsapp_sessions(tenantId, phone);

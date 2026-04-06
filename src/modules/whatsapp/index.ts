@@ -30,7 +30,7 @@ import {
   buildScheduledAt,
   formatScheduledForDisplay,
   MESSAGES,
-} from '../appointments/stateMachine';
+} from '../svc_appointments/stateMachine';
 
 export const whatsappRouter = new Hono<{ Bindings: Bindings; Variables: AppVariables }>();
 
@@ -71,7 +71,7 @@ whatsappRouter.post('/:tenantId', async (c) => {
   // ── Load or create session ─────────────────────────────────────────────────
   const sessionId = `${tenantId}:${phone}`;
   const existingRow = await c.env.DB.prepare(
-    'SELECT * FROM whatsapp_sessions WHERE id = ?'
+    'SELECT * FROM svc_whatsapp_sessions WHERE id = ?'
   ).bind(sessionId).first<WhatsAppSession>();
 
   const session: WhatsAppSession = existingRow ?? {
@@ -123,7 +123,7 @@ whatsappRouter.post('/:tenantId', async (c) => {
     } else {
       const scheduledAt = buildScheduledAt(date, time);
 
-      // Bug fix: reject appointments in the past — buildScheduledAt converts
+      // Bug fix: reject svc_appointments in the past — buildScheduledAt converts
       // WAT to UTC; compare against current UTC to guard against "today" at a
       // past time, or any clock-skew scenario.
       if (scheduledAt <= new Date().toISOString()) {
@@ -139,7 +139,7 @@ whatsappRouter.post('/:tenantId', async (c) => {
 
         try {
           await c.env.DB.prepare(
-            `INSERT INTO appointments
+            `INSERT INTO svc_appointments
                (id, tenantId, clientPhone, clientName, service, scheduledAt, durationMinutes, status, notes, createdAt, updatedAt)
              VALUES (?, ?, ?, ?, ?, ?, 30, 'confirmed', ?, ?, ?)`
           ).bind(
@@ -167,7 +167,7 @@ whatsappRouter.post('/:tenantId', async (c) => {
   // ── Persist session ────────────────────────────────────────────────────────
   if (existingRow) {
     await c.env.DB.prepare(
-      `UPDATE whatsapp_sessions
+      `UPDATE svc_whatsapp_sessions
        SET state = ?, collectedService = ?, collectedDate = ?, collectedTime = ?,
            appointmentId = ?, updatedAt = ?
        WHERE id = ?`
@@ -182,7 +182,7 @@ whatsappRouter.post('/:tenantId', async (c) => {
     ).run();
   } else {
     await c.env.DB.prepare(
-      `INSERT INTO whatsapp_sessions
+      `INSERT INTO svc_whatsapp_sessions
          (id, tenantId, phone, state, collectedService, collectedDate, collectedTime, appointmentId, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     ).bind(

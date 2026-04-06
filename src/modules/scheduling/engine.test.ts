@@ -165,20 +165,20 @@ describe('generateSlots', () => {
 
 function makeMockD1(
   availabilityRow: { startTime: string; endTime: string } | null,
-  appointments: Array<{ scheduledAt: string; durationMinutes: number }>,
+  svc_appointments: Array<{ scheduledAt: string; durationMinutes: number }>,
 ): D1Database {
   const mockPrepare = (sql: string) => {
     return {
       bind: (..._args: unknown[]) => ({
         first: async <T>() => {
-          if (sql.includes('staff_availability')) {
+          if (sql.includes('svc_staff_availability')) {
             return availabilityRow as T | null;
           }
           return null as T | null;
         },
         all: async <T>() => {
-          if (sql.includes('appointments')) {
-            return { results: appointments as T[], success: true, meta: {} as D1Meta };
+          if (sql.includes('svc_appointments')) {
+            return { results: svc_appointments as T[], success: true, meta: {} as D1Meta };
           }
           return { results: [] as T[], success: true, meta: {} as D1Meta };
         },
@@ -192,24 +192,24 @@ function makeMockD1(
 }
 
 describe('calculateAvailableSlots', () => {
-  it('returns empty array when staff has no availability window for the day', async () => {
+  it('returns empty array when svc_staff has no availability window for the day', async () => {
     const db = makeMockD1(null, []);
     const slots = await calculateAvailableSlots({
       db,
       tenantId: 'tenant-1',
-      staffId: 'staff-1',
+      staffId: 'svc_staff-1',
       date: '2025-04-14', // Monday
       serviceDurationMinutes: 60,
     });
     expect(slots).toHaveLength(0);
   });
 
-  it('returns slots when staff has availability and no appointments', async () => {
+  it('returns slots when svc_staff has availability and no svc_appointments', async () => {
     const db = makeMockD1({ startTime: '09:00', endTime: '17:00' }, []);
     const slots = await calculateAvailableSlots({
       db,
       tenantId: 'tenant-1',
-      staffId: 'staff-1',
+      staffId: 'svc_staff-1',
       date: '2027-06-14', // Future Monday
       serviceDurationMinutes: 60,
       bufferMinutes: 15,
@@ -222,7 +222,7 @@ describe('calculateAvailableSlots', () => {
     }
   });
 
-  it('includes travel overhead in total block for mobile services', async () => {
+  it('includes travel overhead in total block for mobile svc_services', async () => {
     // With a large travel distance, totalBlock should be much larger
     // resulting in fewer available slots
     const db = makeMockD1({ startTime: '09:00', endTime: '17:00' }, []);
@@ -230,7 +230,7 @@ describe('calculateAvailableSlots', () => {
     const staticSlots = await calculateAvailableSlots({
       db,
       tenantId: 'tenant-1',
-      staffId: 'staff-1',
+      staffId: 'svc_staff-1',
       date: '2027-06-14', // Future Monday
       serviceDurationMinutes: 60,
       bufferMinutes: 15,
@@ -240,7 +240,7 @@ describe('calculateAvailableSlots', () => {
     const mobileSlots = await calculateAvailableSlots({
       db,
       tenantId: 'tenant-1',
-      staffId: 'staff-1',
+      staffId: 'svc_staff-1',
       date: '2027-06-14', // Future Monday
       serviceDurationMinutes: 60,
       bufferMinutes: 15,
@@ -251,7 +251,7 @@ describe('calculateAvailableSlots', () => {
       clientLng: 3.4219,
     });
 
-    // Mobile appointments take more time per block → fewer slots
+    // Mobile svc_appointments take more time per block → fewer slots
     expect(mobileSlots.length).toBeLessThanOrEqual(staticSlots.length);
   });
 
@@ -265,7 +265,7 @@ describe('calculateAvailableSlots', () => {
     const slots = await calculateAvailableSlots({
       db,
       tenantId: 'tenant-1',
-      staffId: 'staff-1',
+      staffId: 'svc_staff-1',
       date: '2027-06-14',
       serviceDurationMinutes: 60,
       bufferMinutes: 15,

@@ -1,16 +1,16 @@
 /**
  * Appointments Module — REST CRUD + Calendar Feed + Auto-Reminders
  *
- * Authenticated endpoints for internal management of booked appointments.
+ * Authenticated endpoints for internal management of booked svc_appointments.
  * Tenant isolation is enforced via JWT (tenantId NEVER sourced from headers).
  *
  * Routes:
- *   GET  /api/appointments              — list appointments
- *   GET  /api/appointments/calendar.ics — iCalendar feed for external calendar sync
- *   GET  /api/appointments/:id          — get single appointment
- *   POST /api/appointments              — manually create an appointment
- *   PATCH /api/appointments/:id         — update status / notes / reschedule
- *   DELETE /api/appointments/:id        — cancel appointment
+ *   GET  /api/svc_appointments              — list svc_appointments
+ *   GET  /api/svc_appointments/calendar.ics — iCalendar feed for external calendar sync
+ *   GET  /api/svc_appointments/:id          — get single appointment
+ *   POST /api/svc_appointments              — manually create an appointment
+ *   PATCH /api/svc_appointments/:id         — update status / notes / reschedule
+ *   DELETE /api/svc_appointments/:id        — cancel appointment
  *
  * WW-SVC-001: Calendar integration via iCal (RFC 5545) feed.
  * WW-SVC-005: Auto-schedules 24h + 1h SMS/WhatsApp reminders on appointment create.
@@ -49,12 +49,12 @@ function toICalDate(iso: string): string {
 }
 
 /**
- * Builds a valid RFC 5545 iCalendar feed from a list of appointments.
+ * Builds a valid RFC 5545 iCalendar feed from a list of svc_appointments.
  * Each appointment becomes a VEVENT with UID, DTSTART, DTEND, SUMMARY, and DESCRIPTION.
  */
 function buildICalFeed(
   tenantId: string,
-  appointments: Array<{
+  svc_appointments: Array<{
     id: string;
     service: string;
     scheduledAt: string;
@@ -76,14 +76,14 @@ function buildICalFeed(
     'X-WR-TIMEZONE:Africa/Lagos',
   ];
 
-  for (const appt of appointments) {
+  for (const appt of svc_appointments) {
     if (appt.status === 'cancelled') continue;
 
     const startMs = new Date(appt.scheduledAt).getTime();
     const endMs = startMs + appt.durationMinutes * 60 * 1000;
     const dtStart = toICalDate(new Date(startMs).toISOString());
     const dtEnd = toICalDate(new Date(endMs).toISOString());
-    const uid = appt.calendarEventId ?? `${appt.id}@webwaka-services`;
+    const uid = appt.calendarEventId ?? `${appt.id}@webwaka-svc_services`;
     const summary = icalEscape(`${appt.service}${appt.clientName ? ` — ${appt.clientName}` : ''}`);
     const description = icalEscape(
       [
@@ -113,8 +113,8 @@ function buildICalFeed(
 }
 
 /**
- * Checks whether a new appointment for a specific staff member conflicts with
- * any existing confirmed or pending appointments.
+ * Checks whether a new appointment for a specific svc_staff member conflicts with
+ * any existing confirmed or pending svc_appointments.
  */
 export async function checkDoubleBooking(
   db: D1Database,
@@ -131,7 +131,7 @@ export async function checkDoubleBooking(
 
   const { results } = await db
     .prepare(
-      `SELECT id, scheduledAt, durationMinutes FROM appointments
+      `SELECT id, scheduledAt, durationMinutes FROM svc_appointments
        WHERE tenantId = ? AND staffId = ?
          AND status IN ('confirmed', 'pending')
          AND scheduledAt >= ? AND scheduledAt <= ?`,
@@ -182,7 +182,7 @@ async function autoScheduleReminders(
 
     await db
       .prepare(
-        `INSERT INTO reminder_logs
+        `INSERT INTO svc_reminder_logs
            (id, tenantId, appointmentId, channel, recipient, scheduledFor,
             status, sentAt, errorMessage, createdAt, updatedAt)
          VALUES (?, ?, ?, 'whatsapp', ?, ?, 'scheduled', NULL, NULL, ?, ?)`,
@@ -202,14 +202,14 @@ appointmentsRouter.get('/calendar.ics', requireRole(['admin', 'manager', 'consul
   const user = c.get('user');
   const tenantId = user.tenantId;
 
-  // Fetch upcoming non-cancelled appointments (90-day window)
+  // Fetch upcoming non-cancelled svc_appointments (90-day window)
   const from = new Date().toISOString();
   const to = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
 
   const { results } = await c.env.DB.prepare(
     `SELECT id, service, scheduledAt, durationMinutes, status, clientName,
             clientPhone, notes, calendarEventId
-     FROM appointments
+     FROM svc_appointments
      WHERE tenantId = ? AND scheduledAt >= ? AND scheduledAt <= ?
        AND status != 'cancelled'
      ORDER BY scheduledAt ASC
@@ -233,7 +233,7 @@ appointmentsRouter.get('/calendar.ics', requireRole(['admin', 'manager', 'consul
   return new Response(ical, {
     headers: {
       'Content-Type': 'text/calendar; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="webwaka-appointments.ics"',
+      'Content-Disposition': 'attachment; filename="webwaka-svc_appointments.ics"',
       'Cache-Control': 'no-cache, no-store',
     },
   });
@@ -252,7 +252,7 @@ appointmentsRouter.get('/', requireRole(['admin', 'manager', 'consultant']), asy
   const from = c.req.query('from');
   const to = c.req.query('to');
 
-  let query = 'SELECT * FROM appointments WHERE tenantId = ?';
+  let query = 'SELECT * FROM svc_appointments WHERE tenantId = ?';
   const bindings: unknown[] = [tenantId];
 
   if (status) { query += ' AND status = ?'; bindings.push(status); }
@@ -278,7 +278,7 @@ appointmentsRouter.get('/:id', requireRole(['admin', 'manager', 'consultant']), 
   const id = c.req.param('id');
 
   const row = await c.env.DB.prepare(
-    'SELECT * FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT * FROM svc_appointments WHERE id = ? AND tenantId = ?',
   ).bind(id, tenantId).first();
 
   if (!row) return c.json({ error: 'Appointment not found' }, 404);
@@ -326,7 +326,7 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   // ── Double-booking check ─────────────────────────────────────────────────
   if (body.staffId) {
     const staffExists = await c.env.DB.prepare(
-      "SELECT id FROM staff WHERE id = ? AND tenantId = ? AND status = 'active'",
+      "SELECT id FROM svc_staff WHERE id = ? AND tenantId = ? AND status = 'active'",
     )
       .bind(body.staffId, tenantId)
       .first<{ id: string }>();
@@ -345,7 +345,7 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
 
     if (conflict.hasConflict) {
       return c.json({
-        error: 'Double-booking detected: staff member already has an appointment at this time',
+        error: 'Double-booking detected: svc_staff member already has an appointment at this time',
         conflictingAppointmentId: conflict.conflictingId,
       }, 409);
     }
@@ -355,7 +355,7 @@ appointmentsRouter.post('/', requireRole(['admin', 'manager']), async (c) => {
   const now = new Date().toISOString();
 
   await c.env.DB.prepare(
-    `INSERT INTO appointments
+    `INSERT INTO svc_appointments
        (id, tenantId, clientPhone, clientName, clientId, service, scheduledAt,
         durationMinutes, status, notes, staffId, isMobile, locationLat, locationLng,
         calendarEventId, createdAt, updatedAt)
@@ -401,7 +401,7 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_appointments WHERE id = ? AND tenantId = ?',
   ).bind(id, tenantId).first();
 
   if (!existing) return c.json({ error: 'Appointment not found' }, 404);
@@ -447,7 +447,7 @@ appointmentsRouter.patch('/:id', requireRole(['admin', 'manager']), async (c) =>
   vals.push(tenantId);
 
   await c.env.DB.prepare(
-    `UPDATE appointments SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
+    `UPDATE svc_appointments SET ${fields.join(', ')} WHERE id = ? AND tenantId = ?`,
   ).bind(...vals).run();
 
   return c.json({ success: true });
@@ -461,19 +461,19 @@ appointmentsRouter.delete('/:id', requireRole(['admin', 'manager']), async (c) =
   const id = c.req.param('id');
 
   const existing = await c.env.DB.prepare(
-    'SELECT id FROM appointments WHERE id = ? AND tenantId = ?',
+    'SELECT id FROM svc_appointments WHERE id = ? AND tenantId = ?',
   ).bind(id, tenantId).first();
 
   if (!existing) return c.json({ error: 'Appointment not found' }, 404);
 
   const now = new Date().toISOString();
   await c.env.DB.prepare(
-    "UPDATE appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
+    "UPDATE svc_appointments SET status = 'cancelled', updatedAt = ? WHERE id = ? AND tenantId = ?",
   ).bind(now, id, tenantId).run();
 
   // Cancel any scheduled reminders for this appointment
   await c.env.DB.prepare(
-    "UPDATE reminder_logs SET status = 'cancelled', updatedAt = ? WHERE appointmentId = ? AND status = 'scheduled'",
+    "UPDATE svc_reminder_logs SET status = 'cancelled', updatedAt = ? WHERE appointmentId = ? AND status = 'scheduled'",
   ).bind(now, id).run();
 
   return c.json({ success: true });

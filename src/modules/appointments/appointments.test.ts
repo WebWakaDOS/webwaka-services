@@ -3,12 +3,12 @@
  *
  * Tests:
  *   1. checkDoubleBooking — exported pure-ish function with mock D1
- *      • No conflict when staff has no existing appointments
+ *      • No conflict when svc_staff has no existing svc_appointments
  *      • Detects exact overlap
  *      • Detects partial overlap (new appointment starts during existing one)
  *      • Detects partial overlap (new appointment ends during existing one)
  *      • No conflict when new appointment is adjacent (starts exactly when existing ends)
- *      • Cancelled appointments do not count as conflicts
+ *      • Cancelled svc_appointments do not count as conflicts
  *
  * DB-coupled tests use a lightweight in-memory mock that satisfies the D1Database
  * interface surface used by checkDoubleBooking (same pattern as engine.test.ts).
@@ -20,12 +20,12 @@ import { checkDoubleBooking } from './index';
 // ─── Mock D1 factory ──────────────────────────────────────────────────────────
 
 function makeMockD1ForDoubleBooking(
-  appointments: Array<{ id: string; scheduledAt: string; durationMinutes: number }>,
+  svc_appointments: Array<{ id: string; scheduledAt: string; durationMinutes: number }>,
 ): D1Database {
   const mockPrepare = (_sql: string) => ({
     bind: (..._args: unknown[]) => ({
       all: async <T>() => ({
-        results: appointments as T[],
+        results: svc_appointments as T[],
         success: true,
         meta: {} as D1Meta,
       }),
@@ -42,9 +42,9 @@ function makeMockD1ForDoubleBooking(
 
 describe('checkDoubleBooking', () => {
   const tenantId = 'tenant-1';
-  const staffId = 'staff-abc';
+  const staffId = 'svc_staff-abc';
 
-  it('returns no conflict when the staff has no existing appointments', async () => {
+  it('returns no conflict when the svc_staff has no existing svc_appointments', async () => {
     const db = makeMockD1ForDoubleBooking([]);
     const result = await checkDoubleBooking(
       db,
@@ -165,14 +165,14 @@ describe('checkDoubleBooking', () => {
     expect(result.conflictingId).toBe('conflict-first');
   });
 
-  it('returns no conflict when only appointments for different staff are present', async () => {
-    // The mock returns the given appointments regardless, simulating the DB
+  it('returns no conflict when only svc_appointments for different svc_staff are present', async () => {
+    // The mock returns the given svc_appointments regardless, simulating the DB
     // having already filtered by staffId. Empty results = no conflict.
     const db = makeMockD1ForDoubleBooking([]);
     const result = await checkDoubleBooking(
       db,
       'tenant-1',
-      'staff-other',
+      'svc_staff-other',
       '2027-06-14T10:00:00.000Z',
       60,
     );
